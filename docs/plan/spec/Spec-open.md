@@ -12,21 +12,24 @@ ID の付け方: 本システムの未確定事項は `SS-<分類><番号>`（th
 ## 1. 関連システムとの関係
 
 **本システムは fk-system から欲しい情報を受け取り、その情報を得るために hve-system のカメラを動かし、画像から推定した結果を返す**（2026-10-31 ユーザー決定。fk-system `FD-9`・`FD-10`）。
-**本システムの仕様は fk-system の設計が決める。ただし汎用的になるよう意識する**（`SSD-4`）。
+**本システムの仕様は fk-system の設計が決める。ただし汎用的になるよう意識する**（将来の th-system の前日準備の自動化にも。`SSD-4`）。
+**昇降機は本システムと fk-system の両方が動かす。ぶつからないよう気をつけるのは fk-system**（2026-10-31 ユーザー決定。`SSD-5`）。
 **写しより相手の原文が正。**相手のリポジトリはここから編集しない（CLAUDE.md「関連システムとの境界」）。
 
 | 相手 | 関係 | 決まっていないこと |
 | --- | --- | --- |
 | fk-system | **欲しい情報を渡してくる相手。本システムの仕様を決める**（`SSD-4`）。本システムの推定結果を使って判断する。**fk-system の実装管理担当からの指示を受ける**（[ImplementationPlan.md](../ImplementationPlan.md) §2.4） | 何を要求され何を返すか（`SS-A1`） |
-| hve-system | 上部カメラを持つ。**本システムがカメラを動かして画像を得る**（`SSD-3`） | 昇降機も動かすか（`SS-A5`）。カメラの位置・内部パラメータをどこから得るか（`SS-A2`） |
+| hve-system | 昇降機と上部カメラを持つ。**本システムがカメラと昇降機を動かして画像を得る**（`SSD-3`・`SSD-5`） | カメラの位置・内部パラメータをどこから得るか（`SS-A2`） |
 | th-system | ロボットの自己位置を持つ（推定の前提。[Spec.md](Spec.md) §1.2） | 自己位置をどこから受け取るか（`SS-A2`） |
+| （将来）th-system の前日準備を自動化するシステム | **作るかもしれない。**本システムを使いうる相手として汎用性を意識する（`SSD-4`。前日準備の中身は th-system [Spec-onsite.md](../../../../th-system/docs/plan/spec/Spec-onsite.md) §2） | 何を求めうるか（`SS-S2`） |
 
 ### 1.1 相手側の決まりごとで、本システムの決定とぶつかるもの
 
 | 相手の決まりごと | 本システムの決定 | 扱い |
 | --- | --- | --- |
-| hve-system `HD-3`: **高さは人が映像を見て決める**（hve-system [Spec.md](../../../../hve-system/docs/plan/spec/Spec.md) §4・§6） | **本システムがカメラを動かし、天面が映るまで走査して画角を合わせる**（`SSD-3`。昇降機も動かすかは `SS-A5`） | **未解決。**fk-system の流れ（昇降機で走査する）とも同じ問題で、fk-system [Spec-open.md](../../../../fk-system/docs/plan/spec/Spec-open.md) §1.1 に載っている。hve-system 側で決める |
+| hve-system `HD-3`: **高さは人が映像を見て決める**（hve-system [Spec.md](../../../../hve-system/docs/plan/spec/Spec.md) §4・§6） | **本システムがカメラと昇降機を動かし、天面が映るまで走査して画角を合わせる**（`SSD-3`・`SSD-5`） | **未解決。**fk-system の流れ（昇降機で走査する）とも同じ問題で、fk-system [Spec-open.md](../../../../fk-system/docs/plan/spec/Spec-open.md) §1.1 に載っている。hve-system 側で決める |
 | hve-system [Spec-ui.md](../../../../hve-system/docs/plan/spec/Spec-ui.md): カメラの画面を使っている間は走行系を動かさない。**操作者の運用で守る** | 人の代わりに本システムがカメラを動かす | **未解決**（fk-system `FK-X1`。走行と組み合わせる判断は fk-system が持つ） |
+| hve-system [Spec-module.md](../../../../hve-system/docs/plan/spec/Spec-module.md): **上部モジュールは同時に 1 台だけ。**別の上部モジュールがつながったら新しい方に置き換え、古い接続は切る | **昇降機を本システムと fk-system の両方が動かす**（`SSD-5`） | **未解決。**fk-system [Spec-open.md](../../../../fk-system/docs/plan/spec/Spec-open.md) §1.1 に同じ問題が載っている。hve-system 側で決める |
 
 `SS-A2` で自己位置の受け取り方を決めるときは、hve-system `HD-1`（th-system と独立・連動なし）と、
 fk-system の「hve-system と th-system を直接つなぐ設計を持ち込まない」を守る。
@@ -37,8 +40,8 @@ fk-system の「hve-system と th-system を直接つなぐ設計を持ち込ま
 
 | 相手 | 要ること | 根拠 | 状態 |
 | --- | --- | --- | --- |
-| fk-system | 何を要求し何を受け取るか（fk-system `FK-A1`）。自己位置・LiDAR の地図の渡し方（fk-system `FK-A6`）。昇降機も本システムが動かすか（fk-system `FK-A7`）。推定に要る精度（fk-system `FK-V4`） | `SS-A1`・`SS-A2`・`SS-A5`・`SS-G1` | fk-system 側で未定 |
-| hve-system | **本システムからカメラを動かす指示を受け、映像を渡す。**指示を受けている間は高さを指示で決めてよいことにする（`HD-3`。§1.1） | `SSD-3` | fk-system の申し送り（fk-system [Spec-open.md](../../../../fk-system/docs/plan/spec/Spec-open.md) §1.2）に載せた。未送付 |
+| fk-system | 何を要求し何を受け取るか（fk-system `FK-A1`）。自己位置・LiDAR の地図の渡し方（fk-system `FK-A6`）。推定に要る精度（fk-system `FK-V4`） | `SS-A1`・`SS-A2`・`SS-G1` | fk-system 側で未定 |
+| hve-system | **本システムからカメラと昇降機を動かす指示を受け、映像を渡す。**昇降機は fk-system からも受ける（上部モジュールは 1 台だけ、とぶつかる）。指示を受けている間は高さを指示で決めてよいことにする（`HD-3`。§1.1） | `SSD-3`・`SSD-5` | fk-system の申し送り（fk-system [Spec-open.md](../../../../fk-system/docs/plan/spec/Spec-open.md) §1.2）に載せた。未送付 |
 
 ---
 
@@ -50,7 +53,7 @@ fk-system の「hve-system と th-system を直接つなぐ設計を持ち込ま
 | --- | --- | --- |
 | **`SS-G1`** | **本システムの目標と合格ライン。**検証レポートの合格ライン（盤中心の位置 ±15 cm・向き ±5° など）は配置図を作るための検証用で、測る点の位置決めに要る精度は fk-system `FK-V4`。th-system の設計思想（SD-1〜SD-9）を引き継ぐか | 精度の判定・設計の優先順位 |
 | **`SS-S1`** | **先行試作 `lifting-lug-pose` を引き継ぐか。**引き継ぐならどこまでをこのリポジトリに入れるか（コード・学習済みモデル・合成データ。データとモデルは大きい） | ファイル構成・`.gitignore`・最初の作業パケット |
-| **`SS-S2`** | **汎用の範囲**（`SSD-4`）。fk-system 以外から要求を受けることを想定するか。どんな情報まで扱えるようにするか | 要求の形（`SS-A1`）・推定の方法の差し替えやすさ |
+| **`SS-S2`** | **汎用の範囲**（`SSD-4`）。**将来作るかもしれない th-system の前日準備を自動化するシステムに対応できるよう意識する**ことは決定（2026-10-31）。そのシステムが何を求めうるか（th-system の前日準備は地図作成と盤・待機場所の登録）、ほかにどこまで広げるか | 要求の形（`SS-A1`）・推定の方法の差し替えやすさ |
 
 ### 2.2 構成
 
@@ -60,7 +63,6 @@ fk-system の「hve-system と th-system を直接つなぐ設計を持ち込ま
 | **`SS-A2`** | **ロボットの自己位置と、カメラの位置・内部パラメータをどこから得るか。**画像は本システムが動かす hve-system のカメラから得る（2026-10-31 決定。`SSD-3`） | 自己位置: 要求と一緒に fk-system から受け取る ／ th-system から受け取る（fk-system `FK-A6`） |
 | `SS-A3` | 本システムはどこで動くか（ロボットの上か外か。GPU が要るか） | 検証レポートの処理時間は GPU で測った値 |
 | `SS-A4` | 使う道具（言語・学習環境）と、それぞれの試験方法 | 決まったら `CLAUDE.md`「ビルドとテスト」に書く |
-| **`SS-A5`** | **動かす「hve-system のカメラ」に昇降機（高さ）を含むか**（fk-system `FK-A7` と同じ問い） | 含む（hve-system の上部モジュールは昇降部に昇降を命じられる。hve-system `HD-4`） ／ 含まない（向き＝ヨー・ピッチだけ。高さは fk-system が命じる） |
 
 ### 2.3 値・精度
 
@@ -80,3 +82,4 @@ fk-system の「hve-system と th-system を直接つなぐ設計を持ち込ま
 | 2026-10-31 | `SSD-2` | **推定は天板四隅の吊り金具を手がかりにする**（[検証レポート](https://claude.ai/artifact/A3Pz8dbXUn2srTn8NQFq2J)） | [Spec.md](Spec.md) §1.2・§4 |
 | 2026-10-31 | — | **fk-system の実装管理担当からの指示を受ける** | `CLAUDE.md` ／ [ImplementationPlan.md](../ImplementationPlan.md) §2.4 |
 | 2026-10-31 | `SSD-3`・`SSD-4`・`SS-A2`（一部） | **fk-system は欲しい情報を渡し、本システムがその情報を得るために hve-system のカメラを動かす。本システムの仕様は fk-system の設計が決めるが、汎用的になるよう意識する**（ユーザー決定。fk-system `FD-10`） | [Spec.md](Spec.md) §1・§1.1・§1.2・§4 ／ §1・§2 ／ `CLAUDE.md` |
+| 2026-10-31 | `SSD-4`（中身）・`SSD-5`・`SS-A5`・`SS-S2`（一部） | **将来作るかもしれない th-system の前日準備を自動化するシステムにも対応できる汎用性を意識する。本システムに昇降機の操作権限を与える（カメラの位置合わせに使う）。fk-system も昇降機を動かす（測定機構に使う）。本システムの操作中に昇降機を動かさないよう気をつけるのは指示を出す fk-system で、本システムに義務はない**（ユーザー決定。fk-system `FD-11`） | [Spec.md](Spec.md) §1・§1.1・§4 ／ §1・§1.1・§1.2・§2 ／ `CLAUDE.md` |
