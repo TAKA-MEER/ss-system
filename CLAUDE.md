@@ -7,8 +7,9 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 **配電盤上部を確認するロボットの画像認識を担うシステム**（2026-10-31 ユーザー決定。fk-system `FD-9`）。
 中身の正本は [Spec.md](docs/plan/spec/Spec.md)。ここにはコードを書くときに外せない要点だけ置く。
 
-- **fk-system（測定機能。`../fk-system`）からの情報要求に応えて、画像から推定した結果を返す**（API のように振る舞う）。
+- **fk-system（測定機能。`../fk-system`）から欲しい情報を受け取り、その情報を得るために hve-system のカメラを動かし、画像から推定した結果を返す**（API のように振る舞う。`SSD-1`・`SSD-3`）。
   求められているのは盤の配置図・天面の位置・天面中央までの距離など。何をどの形で返すかは未定（[Spec-open.md](docs/plan/spec/Spec-open.md) `SS-A1`）。
+- **仕様は fk-system の設計が決める。ただし fk-system 専用にせず、汎用的になるよう意識する**（`SSD-4`）。
 - 推定は**天板四隅の吊り金具を手がかりにする**（[検証レポート](https://claude.ai/artifact/A3Pz8dbXUn2srTn8NQFq2J)。合成データで検証済み・実物では未確認）。
   先行試作は `../../lifting-lug-pose`（git 管理外）。**写さずに参照する。**引き継ぐかは未定（`SS-S1`）。
 - 残りは未定（[Spec-open.md](docs/plan/spec/Spec-open.md) §2）。**推測で埋めない**（推測は次のセッションで別の推測になる）。
@@ -45,10 +46,11 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ### 関連システム（fk-system・th-system・hve-system）との境界
 
-- **本システムは fk-system からの情報要求に応えて、推定結果を返す**（2026-10-31 ユーザー決定。fk-system `FD-9`）。判断は fk-system が持つ。
+- **判断は fk-system が持つ。本システムは欲しい情報を得るために hve-system のカメラを動かす**（2026-10-31 ユーザー決定。`SSD-3`）。昇降機も動かすかは未定（`SS-A5`）。
+  **走行は指示しない**（走行の指示と、走行と組み合わせる判断は fk-system が持つ。fk-system `FD-2`）。
 - **fk-system の実装管理担当からの指示を受ける**（2026-10-31 ユーザー決定）。扱いは [ImplementationPlan.md](docs/plan/ImplementationPlan.md) §2.4。
   受けた指示でも、**先に本システムの spec を直してからコードを直す**（「方針変更時のルール」がそのまま効く）。
-- 画像・ロボットの自己位置・カメラの情報をどこから得るかは未定（[Spec-open.md](docs/plan/spec/Spec-open.md) `SS-A2`）。
+- ロボットの自己位置・カメラの位置と内部パラメータをどこから得るかは未定（[Spec-open.md](docs/plan/spec/Spec-open.md) `SS-A2`）。
   **hve-system と th-system を直接つなぐ設計を持ち込まない**（hve-system `HD-1`。fk-system も同じ決まり）。
 - **相手側に要ることは [Spec-open.md](docs/plan/spec/Spec-open.md) §1.2 に貯め、fk-system の実装管理担当かユーザーに伝える。**
 - **他のリポジトリは直接編集しない（ユーザーの指示があるときを除く）。**触るときはそのリポジトリの `CLAUDE.md` に従う（作業前の `git status`・自分のファイルだけステージ）。
