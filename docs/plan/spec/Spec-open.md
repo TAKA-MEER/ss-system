@@ -27,9 +27,10 @@ ID の付け方: 本システムの未確定事項は `SS-<分類><番号>`（th
 
 | 相手の決まりごと | 本システムの決定 | 扱い |
 | --- | --- | --- |
-| hve-system `HD-3`: **高さは人が映像を見て決める**（hve-system [Spec.md](../../../../hve-system/docs/plan/spec/Spec.md) §4・§6） | **本システムがカメラと昇降機を動かし、天面が映るまで走査して画角を合わせる**（`SSD-3`・`SSD-5`） | **未解決。**fk-system の流れ（昇降機で走査する）とも同じ問題で、fk-system [Spec-open.md](../../../../fk-system/docs/plan/spec/Spec-open.md) §1.1 に載っている。hve-system 側で決める |
-| hve-system [Spec-ui.md](../../../../hve-system/docs/plan/spec/Spec-ui.md): カメラの画面を使っている間は走行系を動かさない。**操作者の運用で守る** | 人の代わりに本システムがカメラを動かす | **未解決**（fk-system `FK-X1`。走行と組み合わせる判断は fk-system が持つ） |
-| hve-system [Spec-module.md](../../../../hve-system/docs/plan/spec/Spec-module.md): **上部モジュールは同時に 1 台だけ。**別の上部モジュールがつながったら新しい方に置き換え、古い接続は切る | **昇降機を本システムと fk-system の両方が動かす**（`SSD-5`） | **未解決。**fk-system [Spec-open.md](../../../../fk-system/docs/plan/spec/Spec-open.md) §1.1 に同じ問題が載っている。hve-system 側で決める |
+| hve-system `HD-3`: **高さは人が映像を見て決める**（hve-system [Spec.md](../../../../hve-system/docs/plan/spec/Spec.md) §4・§6） | **本システムがカメラと昇降機を動かし、天面が映るまで走査して画角を合わせる**（`SSD-3`・`SSD-5`） | **解決**（2026-11-01 ユーザー決定）: **広げる**（「人、または指示を出すシステムが映像を見て」高さを決める）。hve-system への申し送りは fk-system が送る（§1.2） |
+| hve-system [Spec-ui.md](../../../../hve-system/docs/plan/spec/Spec-ui.md) §1.5: **デジタルズームの倍率は全端末で共通**（カメラモジュールが切り出して送る）。ヨー・ピッチ・昇降は**最後の操作が勝つ**。物理ボタンは遠隔より優先（§0.3） | 人が見ている映像と同じカメラを本システムが動かし、映像を受ける（`SSD-3`・`SSD-5`） | **未解決**（2026-11-01 hve の実装管理担当が指摘。fk-system [conflicts-hve.md](../../../../fk-system/docs/plan/conflicts-hve.md) §6 b・g・h）。hve の見解: 推定には**倍率に関係なく全体が写る静止画（720p。hve `H-U9` の口）を要るときだけ取る**（帯域 `H-A8`）。人に取って代わられたら止まり、勝手に動き直さない。自動で操作中と画面に出す（`SS-A6`）。**2026-11-01 訂正**: 前はここに hve-system `Spec-ui.md` の「使っている間は走行系を動かさない」を挙げていたが、それは予備の高画質映像の帯域の話だった |
+| hve-system [Spec-ui.md](../../../../hve-system/docs/plan/spec/Spec-ui.md) §1.4: **ヨーの向き（角度）はシステムで扱わない**（原点も角度の読みも無い）。**ピッチもサーボへの目標角だけで、実際の角度は読めない**（制御基板の再起動で正面に跳ぶ） | 推定にはカメラの位置・向きが要る（[Spec.md](Spec.md) §1.2） | **方針決定**（2026-11-01 ユーザー決定）: **hve-system を改良し、ヨーの向きを測れるようにする**（方法は検討中）。ピッチは未解決（`SS-A2`。fk-system [conflicts-hve.md](../../../../fk-system/docs/plan/conflicts-hve.md) §6 a） |
+| hve-system [Spec-module.md](../../../../hve-system/docs/plan/spec/Spec-module.md): **上部モジュールは同時に 1 台だけ。**別の上部モジュールがつながったら新しい方に置き換え、古い接続は切る | **昇降機を本システムと fk-system の両方が動かす**（`SSD-5`） | **解決**（2026-11-01 ユーザー決定）: **昇降部を複数のモジュールからの接続に対応させる**（`H-M3`・`P-5` を変える）。目標の高さへの上昇と完了の報告もできるようにする。天井の距離を必ず使うこと・最後の操作が勝つことは hve-system 側で設計する（fk-system [conflicts-hve.md](../../../../fk-system/docs/plan/conflicts-hve.md) §2） |
 
 `SS-A2` で自己位置の受け取り方を決めるときは、hve-system `HD-1`（th-system と独立・連動なし）と、
 fk-system の「hve-system と th-system を直接つなぐ設計を持ち込まない」を守る。
@@ -41,7 +42,7 @@ fk-system の「hve-system と th-system を直接つなぐ設計を持ち込ま
 | 相手 | 要ること | 根拠 | 状態 |
 | --- | --- | --- | --- |
 | fk-system | 何を要求し何を受け取るか（fk-system `FK-A1`）。自己位置・LiDAR の地図の渡し方（fk-system `FK-A6`）。推定に要る精度（fk-system `FK-V4`） | `SS-A1`・`SS-A2`・`SS-G1` | fk-system 側で未定 |
-| hve-system | **本システムからカメラと昇降機を動かす指示を受け、映像を渡す。**昇降機は fk-system からも受ける（上部モジュールは 1 台だけ、とぶつかる）。指示を受けている間は高さを指示で決めてよいことにする（`HD-3`。§1.1） | `SSD-3`・`SSD-5` | fk-system の申し送り（fk-system [Spec-open.md](../../../../fk-system/docs/plan/spec/Spec-open.md) §1.2）に載せた。未送付 |
+| hve-system | **本システムからカメラと昇降機を動かす指示を受け、映像を渡す。**昇降機は fk-system からも受ける（**複数のモジュールからの接続に対応させる**。2026-11-01 決定）。**`HD-3` を広げる**・**ヨーの向きを測れるように改良する**（2026-11-01 決定） | `SSD-3`・`SSD-5`・§1.1 | fk-system の申し送り（fk-system [Spec-open.md](../../../../fk-system/docs/plan/spec/Spec-open.md) §1.2）に載っている。fk-system の実装管理担当が送る |
 
 ---
 
@@ -59,10 +60,11 @@ fk-system の「hve-system と th-system を直接つなぐ設計を持ち込ま
 
 | ID | 問い | 選択肢の例（決めていない） |
 | --- | --- | --- |
-| **`SS-A1`** | **fk-system から何を要求され、何をどの形で返すか**（[Spec.md](Spec.md) §1.1 の各推定）。測る点そのものを返すか、天面の位置だけ返すか。推定できない・天面が見つからないときに何を返すか（fk-system `FK-S3`）。**要求の形は fk-system 専用にしない**（`SSD-4`） | fk-system `FK-A1` と一緒に決める。**具体的な手段は詳細設計** |
-| **`SS-A2`** | **ロボットの自己位置と、カメラの位置・内部パラメータをどこから得るか。**画像は本システムが動かす hve-system のカメラから得る（2026-10-31 決定。`SSD-3`） | 自己位置: 要求と一緒に fk-system から受け取る ／ th-system から受け取る（fk-system `FK-A6`） |
+| **`SS-A1`** | **fk-system から何を要求され、何をどの形で返すか**（[Spec.md](Spec.md) §1.1 の各推定）。測る点そのものを返すか、天面の位置だけ返すか。推定できない・天面が見つからないときに何を返すか（fk-system `FK-S3`）。**要求の形は fk-system 専用にしない**（`SSD-4`）。fk-system の盤前の旋回・並進で精度が足りなければ、**画像によるフィードバック修正**も求められうる（2026-11-01 fk-system 決定。検討段階） | fk-system `FK-A1` と一緒に決める。**具体的な手段は詳細設計** |
+| **`SS-A2`** | **ロボットの自己位置と、カメラの位置・内部パラメータをどこから得るか。**画像は本システムが動かす hve-system のカメラから得る（2026-10-31 決定。`SSD-3`）。**ヨーの向きは hve-system を改良して測れるようにする**（2026-11-01 決定。方法は検討中）。**ピッチの実際の角度は hve-system では読めない**（目標角だけ） | 自己位置: 要求と一緒に fk-system から受け取る ／ th-system から受け取る（fk-system `FK-A6`）。ピッチ: 画像から推定する ／ hve-system に読めるようにしてもらう |
 | `SS-A3` | 本システムはどこで動くか（ロボットの上か外か。GPU が要るか） | 検証レポートの処理時間は GPU で測った値 |
 | `SS-A4` | 使う道具（言語・学習環境）と、それぞれの試験方法 | 決まったら `CLAUDE.md`「ビルドとテスト」に書く |
+| **`SS-A6`** | **画像の取り方。**いまの映像（MJPEG 480p。デジタルズームの倍率が全端末で共通なので、人が拡大すると画角が変わる）を受けるか、**倍率に関係なく全体が写る静止画（720p。hve-system `H-U9` の口）を要るときだけ取る**か（hve の見解は後者。帯域 `H-A8` も小さい） | fk-system [conflicts-hve.md](../../../../fk-system/docs/plan/conflicts-hve.md) §6 b・h |
 
 ### 2.3 値・精度
 
@@ -83,3 +85,6 @@ fk-system の「hve-system と th-system を直接つなぐ設計を持ち込ま
 | 2026-10-31 | — | **fk-system の実装管理担当からの指示を受ける** | `CLAUDE.md` ／ [ImplementationPlan.md](../ImplementationPlan.md) §2.4 |
 | 2026-10-31 | `SSD-3`・`SSD-4`・`SS-A2`（一部） | **fk-system は欲しい情報を渡し、本システムがその情報を得るために hve-system のカメラを動かす。本システムの仕様は fk-system の設計が決めるが、汎用的になるよう意識する**（ユーザー決定。fk-system `FD-10`） | [Spec.md](Spec.md) §1・§1.1・§1.2・§4 ／ §1・§2 ／ `CLAUDE.md` |
 | 2026-10-31 | `SSD-4`（中身）・`SSD-5`・`SS-A5`・`SS-S2`（一部） | **将来作るかもしれない th-system の前日準備を自動化するシステムにも対応できる汎用性を意識する。本システムに昇降機の操作権限を与える（カメラの位置合わせに使う）。fk-system も昇降機を動かす（測定機構に使う）。本システムの操作中に昇降機を動かさないよう気をつけるのは指示を出す fk-system で、本システムに義務はない**（ユーザー決定。fk-system `FD-11`） | [Spec.md](Spec.md) §1・§1.1・§4 ／ §1・§1.1・§1.2・§2 ／ `CLAUDE.md` |
+| 2026-11-01 | `SS-A2`（一部）・hve `HD-3`・`H-M3` | **hve-system を改良してヨーの向きを測れるようにする**（方法は検討中）。hve-system `HD-3` を広げる。**昇降部を複数のモジュールからの接続に対応させ、目標の高さへの上昇と完了の報告をできるようにする**（ユーザー決定。fk-system 経由。**ユーザーの許可で fk-system の実装管理担当が直接編集**） | [Spec.md](Spec.md) §1.2 ／ §1.1・§1.2・§2 |
+| 2026-11-01 | — | 自律測定の配置図は**起動のたびに作り直す**（fk-system `FD-13`）。盤前の旋回・並進で精度が足りなければ**画像によるフィードバック修正**を検討する（fk-system 決定） | [Spec.md](Spec.md) §1.1 ／ §2 |
+| 2026-11-01 | — | **fk-system の実装管理担当からの指示は、ユーザーが確認して続行承認を出してから着手する（毎回）** | `CLAUDE.md` ／ [ImplementationPlan.md](../ImplementationPlan.md) §2.4 |
