@@ -15,9 +15,9 @@ spec に統合する前の材料。**仕様の正ではない。**spec に取り
 
 | リポジトリ | 入口 | 中身 |
 | --- | --- | --- |
-| fk-system | `../fk-system/docs/plan/spec/README.md` | 測定機能の完全設計書（正本）。本システムに情報を要求する側 |
-| th-system | `../th-system/docs/plan/spec/README.md` | 移動システムの完全設計書（正本） |
-| hve-system | `../hve-system/docs/plan/spec/README.md` | 昇降機・上部カメラの完全設計書（正本） |
+| fk-system | `../fk-system/docs/plan/spec/README.md` | 測定機能の仕様書（正本）。本システムに情報を要求する側 |
+| th-system | `../th-system/docs/plan/spec/README.md` | 移動システムの仕様書（正本） |
+| hve-system | `../hve-system/docs/plan/spec/README.md` | 昇降機・上部カメラの仕様書（正本） |
 
 パスはリポジトリ直下（`ss-system/`）基準。
 

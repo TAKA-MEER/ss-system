@@ -2,7 +2,7 @@
 
 **何を・どの順番で作るか。**進捗はこのファイルの「状態」列を更新して共有する。
 
-- 何を作るかは [完全設計書](spec/README.md)（正本）と [詳細設計書](detailed/README.md) にある。
+- 何を作るかは [仕様書](spec/README.md)（正本）と [詳細設計書](detailed/README.md) にある。
   ここはその**順番と進み具合**だけを扱う。
 - 進め方（§2）は fk-system の [ImplementationPlan.md](../../../fk-system/docs/plan/ImplementationPlan.md) §2 を
   2026-10-31 時点で写したもの（fk-system は th-system の [ImplementationPlan.md](../../../th-system/docs/plan/ImplementationPlan.md) §2 を写した）。
@@ -17,7 +17,7 @@
 
 | | 状態 |
 | --- | --- |
-| 完全設計書（何が・どう振る舞うべきか） | **役割の枠だけ決定**（fk-system から欲しい情報を受け取り、hve-system のカメラと昇降機を動かして推定して返す。仕様は fk-system の設計が決め、汎用を意識する。推定は吊り金具を手がかりにする）。何を返すか（[Spec-open.md](spec/Spec-open.md) `SS-A1`）以降は未定 |
+| 仕様書（何が・どう振る舞うべきか） | **役割の枠だけ決定**（fk-system から欲しい情報を受け取り、hve-system のカメラと昇降機を動かして推定して返す。仕様は fk-system の設計が決め、汎用を意識する。推定は吊り金具を手がかりにする）。何を返すか（[Spec-open.md](spec/Spec-open.md) `SS-A1`）以降は未定 |
 | 詳細設計書（どう実装するか） | 骨格のみ |
 | 実装 | **未着手**（先行試作 `lifting-lug-pose` はこのリポジトリの外。引き継ぐかは `SS-S1`） |
 
@@ -250,7 +250,7 @@ th-system では 14 回マージしたのに計画書に反映されたのは 1 
 
 | 文書 | 中身 |
 | --- | --- |
-| [`spec/README.md`](spec/README.md) | 完全設計書。何が・どう振る舞うべきか |
+| [`spec/README.md`](spec/README.md) | 仕様書。何が・どう振る舞うべきか |
 | [`detailed/README.md`](detailed/README.md) | 詳細設計書。各作業単位の実装内容と完了条件 |
 | [`EXCEPTION-LEDGER.md`](EXCEPTION-LEDGER.md) | デモ特例で省略・バイパスしたままの事項 |
 | th-system [`ImplementationPlan.md`](../../../th-system/docs/plan/ImplementationPlan.md) §2 | 進め方の手本。改定に気づいたら §2 へ取り込む |
