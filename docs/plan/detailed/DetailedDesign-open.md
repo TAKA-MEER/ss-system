@@ -12,7 +12,7 @@
 
 | 完全設計書の ID | 詳細設計で要ること |
 | --- | --- |
-| `SS-A1`・`SS-A2`・`SS-A3`・`SS-A4` | 決まり次第、[DetailedDesign.md](DetailedDesign.md) §2 と [-names.md](DetailedDesign-names.md) §0 を書く |
+| `SS-A1`・`SS-A2`・`SS-A4` | 決まり次第、[DetailedDesign.md](DetailedDesign.md) §2 と [-names.md](DetailedDesign-names.md) §0 を書く |
 
 ## 3. レビュー指摘管理表
 

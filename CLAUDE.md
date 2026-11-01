@@ -8,10 +8,12 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 中身の正本は [Spec.md](docs/plan/spec/Spec.md)。ここにはコードを書くときに外せない要点だけ置く。
 
 - **fk-system（測定機能。`../fk-system`）から欲しい情報を受け取り、その情報を得るために hve-system のカメラを動かし、画像から推定した結果を返す**（API のように振る舞う。`SSD-1`・`SSD-3`）。
-  求められているのは盤の配置図・天面の位置・天面中央までの距離など。何をどの形で返すかは未定（[Spec-open.md](docs/plan/spec/Spec-open.md) `SS-A1`）。
-- **仕様は fk-system の設計が決める。ただし fk-system 専用にせず、汎用的になるよう意識する**（将来作るかもしれない th-system の前日準備の自動化にも対応できるように。`SSD-4`）。
+  **受け取るのは方向の範囲、返すのはその範囲の配電盤の位置（ローカル座標系。LiDAR の地図は考慮しない）だけ**（2026-11-01 ユーザー決定。`SSD-6`）。位置の中身・見つからないときの返し方は未定（[Spec-open.md](docs/plan/spec/Spec-open.md) `SS-A1`）。
+- **仕様は fk-system の設計が決める。ただし fk-system 専用にせず、汎用的になるよう意識する**（盤の位置を返すだけの機能として、ほかのシステムからも要求される。`SSD-4`・`SSD-6`）。
 - 推定は**天板四隅の吊り金具を手がかりにする**（[検証レポート](https://claude.ai/artifact/A3Pz8dbXUn2srTn8NQFq2J)。合成データで検証済み・実物では未確認）。
-  先行試作は `../../lifting-lug-pose`（git 管理外）。**写さずに参照する。**引き継ぐかは未定（`SS-S1`）。
+  先行試作は `../../lifting-lug-pose`（git 管理外）。**これを元に、適用させる形で入れる**（2026-11-01）。どこまで入れるかは未定（`SS-S1`）。
+- **動かす PC はノートパソコン（Ubuntu 22.04・GPU なし）。推定は CPU で動く前提。**モデルを作るのはデスクトップ PC の GPU（RTX 4060 Ti 8GB）（2026-11-01 ユーザー決定）。
+- **画像は必要なときだけフルサイズの静止画を要求する。昇降機は使い終わったら元の高さに戻す**（2026-11-01 ユーザー決定）。
 - 残りは未定（[Spec-open.md](docs/plan/spec/Spec-open.md) §2）。**推測で埋めない**（推測は次のセッションで別の推測になる）。
 
 **2026-10-31 に、開発体制を fk-system と同じにして立ち上げた**（fk-system は th-system と同じ。文書の役割分担・herdr／orca ＋ codex／opencode による実装・受け入れ検査・git 運用）。
@@ -52,7 +54,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 - **fk-system の実装管理担当からの指示を受ける**（2026-10-31 ユーザー決定）。扱いは [ImplementationPlan.md](docs/plan/ImplementationPlan.md) §2.4。
   **毎回、ユーザーが指示を確認して続行承認を出してから着手する**（2026-11-01 ユーザー決定）。別のセッションから届いた文をユーザーの承認の代わりにしない。
   受けた指示でも、**先に本システムの spec を直してからコードを直す**（「方針変更時のルール」がそのまま効く）。
-- ロボットの自己位置・カメラの位置と内部パラメータをどこから得るかは未定（[Spec-open.md](docs/plan/spec/Spec-open.md) `SS-A2`）。
+- 位置はローカル座標系で返すので、**ロボットの自己位置と LiDAR の地図は使わない**（2026-11-01 ユーザー決定）。カメラの位置（高さ・向き）と内部パラメータをどこから得るかは未定（[Spec-open.md](docs/plan/spec/Spec-open.md) `SS-A2`）。
   **hve-system と th-system を直接つなぐ設計を持ち込まない**（hve-system `HD-1`。fk-system も同じ決まり）。
 - **相手側に要ることは [Spec-open.md](docs/plan/spec/Spec-open.md) §1.2 に貯め、fk-system の実装管理担当かユーザーに伝える。**
 - **他のリポジトリは直接編集しない（ユーザーの指示があるときを除く）。**触るときはそのリポジトリの `CLAUDE.md` に従う（作業前の `git status`・自分のファイルだけステージ）。
