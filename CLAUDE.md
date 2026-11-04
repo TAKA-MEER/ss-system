@@ -11,7 +11,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
   **受け取るのは方向の範囲、返すのはその範囲の配電盤の位置（ローカル座標系。LiDAR の地図は考慮しない）だけ**（2026-11-01 ユーザー決定。`SSD-6`）。中身は盤ごとの天面の矩形と確からしさ、見つからないときは空の一覧と理由（2026-11-04 fk-system 決定。[Spec.md](docs/plan/spec/Spec.md) §1.1）。
 - **仕様は fk-system の設計が決める。ただし fk-system 専用にせず、汎用的になるよう意識する**（盤の位置を返すだけの機能として、ほかのシステムからも要求される。`SSD-4`・`SSD-6`）。
 - 推定は**天板四隅の吊り金具を手がかりにする**（[検証レポート](https://claude.ai/artifact/A3Pz8dbXUn2srTn8NQFq2J)。合成データで検証済み・実物では未確認）。
-  先行試作は `../../lifting-lug-pose`（中身と仕様との差は [docs/plan/source/lifting-lug-pose.md](docs/plan/source/lifting-lug-pose.md)）。**これを元に、適用させる形で入れる**（2026-11-01）。どこまで入れるかは未定（`SS-S1`）。
+  先行試作は `../../lifting-lug-pose`（中身と仕様との差は [docs/plan/source/lifting-lug-pose.md](docs/plan/source/lifting-lug-pose.md)）。**これを元に、適用させる形で入れる**（2026-11-01）。**ひとまず、なるべく使い本システムの仕様に合わせる**（2026-11-05）。具体的にどれをどう入れるかは未定（`SS-S1`）。
 - **動かす PC はノートパソコン（Ubuntu 22.04・GPU なし）。推定は CPU で動く前提。**モデルを作るのはデスクトップ PC の GPU（RTX 4060 Ti 8GB）（2026-11-01 ユーザー決定）。
   **本システムは実機でも Windows でも Docker（Ubuntu 22.04）で動かす。合成データの描画と学習は WSL の外（Windows）、動作確認は WSL の Docker**（2026-11-05 ユーザー決定）。
 - **画像は必要なときだけフルサイズの静止画を要求する。昇降機は使い終わったら元の高さに戻す**（2026-11-01 ユーザー決定）。
