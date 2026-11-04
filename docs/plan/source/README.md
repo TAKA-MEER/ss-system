@@ -9,7 +9,7 @@ spec に統合する前の材料。**仕様の正ではない。**spec に取り
 | 材料 | 場所 | 中身 |
 | --- | --- | --- |
 | 吊り金具による配電盤配置推定 検証レポート（2026-10-31） | [https://claude.ai/artifact/A3Pz8dbXUn2srTn8NQFq2J](https://claude.ai/artifact/A3Pz8dbXUn2srTn8NQFq2J) | 合成データでの検証結果（方法・精度・失敗の傾向・実物向けに要る画像と枚数・課題） |
-| 先行試作 `lifting-lug-pose` | `../../lifting-lug-pose`（git 管理外。`TM/` の 1 つ上） | 合成データの生成・金具の検出（2 段）・配置の当てはめ・評価のコードと、学習済みモデル・合成データ。使い方はそのフォルダの `README.md` |
+| 先行試作 `lifting-lug-pose` | `../../lifting-lug-pose`（`TM/` の 1 つ上。2026-11-04 から git 管理・リモートなし） | 合成データの生成・金具単位の検出・金具から盤への組み立て・評価のコードと、学習済みモデル・合成データ。使い方はそのフォルダの `README.md`、試したことは `docs/experiment_log.md`。**中身と本システムの仕様との差は [lifting-lug-pose.md](lifting-lug-pose.md)**（2026-11-05） |
 
 ## 2. 関連リポジトリ
 
