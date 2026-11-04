@@ -13,6 +13,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 - 推定は**天板四隅の吊り金具を手がかりにする**（[検証レポート](https://claude.ai/artifact/A3Pz8dbXUn2srTn8NQFq2J)。合成データで検証済み・実物では未確認）。
   先行試作は `../../lifting-lug-pose`（中身と仕様との差は [docs/plan/source/lifting-lug-pose.md](docs/plan/source/lifting-lug-pose.md)）。**これを元に、適用させる形で入れる**（2026-11-01）。どこまで入れるかは未定（`SS-S1`）。
 - **動かす PC はノートパソコン（Ubuntu 22.04・GPU なし）。推定は CPU で動く前提。**モデルを作るのはデスクトップ PC の GPU（RTX 4060 Ti 8GB）（2026-11-01 ユーザー決定）。
+  **開発に CG と GPU を使うため、Windows でも WSL と Docker で動かして検証できるようにする**（2026-11-05 ユーザー決定）。
 - **画像は必要なときだけフルサイズの静止画を要求する。昇降機は使い終わったら元の高さに戻す**（2026-11-01 ユーザー決定）。
 - 残りは未定（[Spec-open.md](docs/plan/spec/Spec-open.md) §2）。**推測で埋めない**（推測は次のセッションで別の推測になる）。
 
