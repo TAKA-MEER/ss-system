@@ -369,7 +369,7 @@ class LocateCore:
             )
             reason = panels.finish_reason(n_lugs, len(found))
 
-        cmds = [SendCleanupDone(reason, True), SendResult(reason, found, seen_from, seen_span)]
+        cmds = [SendResult(reason, found, seen_from, seen_span)]
         self.stage = None
         self._phase = None
         self._awaiting_frame = False
