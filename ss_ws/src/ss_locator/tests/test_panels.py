@@ -143,3 +143,39 @@ def test_diagonal_pair():
     # 2 個の距離 ÷ √2
     assert top["width_m"] == pytest.approx(1.0)
     assert top["depth_m"] == pytest.approx(top["width_m"])
+
+
+def _front_pair(s_axis):
+    """背中合わせの盤の正面の 2 個。リング面は中心 (0, 3.4) を通る。"""
+    return [
+        {"p": np.array([-0.4, 3.0]), "axis": 45.0, "s_pos": 0.01, "s_axis": s_axis, "conf": 1.0},
+        {"p": np.array([0.4, 3.0]), "axis": 135.0, "s_pos": 0.01, "s_axis": s_axis, "conf": 1.0},
+    ]
+
+
+def test_pos_std_two_lugs_adds_axis_term():
+    """金具 2 個で正面が分かる盤は、r̄ × radians(s̄_axis) を位置の標準偏差に足す（-core.md §4）。"""
+    lugs1 = _front_pair(4.0)
+    lugs0 = _front_pair(1e-6)
+    p1 = A.fit(lugs1, [0, 1])
+    p0 = A.fit(lugs0, [0, 1])
+    assert p1["front_known"] and not p1.get("diagonal", False)
+    np.testing.assert_allclose(p1["center"], p0["center"], atol=1e-6)
+
+    top1 = P.to_panel_top(p1, lugs1, 2.35)
+    top0 = P.to_panel_top(p0, lugs0, 2.35)
+    r_mean = np.mean([np.linalg.norm(np.asarray(p1["center"]) - L["p"]) for L in lugs1])
+    a = r_mean * math.radians(4.0)
+    assert top1["pos_std_m"] ** 2 - top0["pos_std_m"] ** 2 == pytest.approx(a * a, rel=1e-3)
+
+
+def test_pos_std_four_lugs_has_no_axis_term():
+    """金具 4 個の盤には足さない（リング面の向きのばらつきで位置の標準偏差が変わらない）。"""
+    tops = []
+    for s_axis in (1.0, 4.0):
+        lugs = rect_lugs((0.0, 3.0), 0.0, 1.0, 0.6)
+        for L in lugs:
+            L["s_axis"] = s_axis
+        panel = A.fit(lugs, [0, 1, 2, 3])
+        tops.append(P.to_panel_top(panel, lugs, 2.35))
+    assert tops[0]["pos_std_m"] == pytest.approx(tops[1]["pos_std_m"])
