@@ -125,4 +125,6 @@ fk-system から写した（元は th-system・hve-system で踏んだものの�
 - **既に opencode が動いているペインに `herdr agent start` を打たない。**`start` はシェルプロンプト待ちを期待するため、動作中のセッションに文字列を打ち込んで壊す。`herdr agent rename` だけで登録する。
 - **`pkill -f <パターン>` は自分のシェルを殺すことがある**（パターンが自分のコマンドラインにマッチする。docker の中でもホストでも）。PID 指定で止める。
 - Ubuntu 22.04 の apt 版 pip 22 は `--break-system-packages` に対応しない。pytest は実行ファイルが無い場合があるため `python3 -m pytest` を使う。
+- **`orca worktree create` は `origin/main` から切る。**push していないコミットが入らないので、作ったらすぐ `git -C <worktree> reset --hard main` で合わせる（作業前なので失うものは無い。2026-11-05）。
+- **Git Bash から `docker run -v` を打つときは `MSYS_NO_PATHCONV=1` を付け、`$PWD` ではなく `$(pwd -W)` を渡す**（パスが変換されて壊れる）。PowerShell なら `${PWD}` のままでよい。
 - Windows から Docker に bind mount した `ss_ws` では colcon が clock skew の警告を出し、型定義を戻した後も古い生成物を使うことがある。必要なら `ss_ws/build/ss_msgs` と `ss_ws/install/ss_msgs` を消して再ビルドする。
