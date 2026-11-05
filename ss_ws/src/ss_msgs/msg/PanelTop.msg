@@ -1,0 +1,12 @@
+float64 x_m
+float64 y_m
+float32 top_height_m
+bool height_measured
+float64 yaw_rad
+float32 width_m
+float32 depth_m
+float32 pos_std_m
+float32 yaw_std_deg
+int32 lugs
+bool front_known
+float64 front_yaw_rad

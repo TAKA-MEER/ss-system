@@ -1,0 +1,12 @@
+float32 azimuth_from_rad
+float32 azimuth_span_rad
+float32 max_distance_m
+float32 time_limit_s
+---
+std_msgs/Header header
+string reason
+ss_msgs/PanelTop[] panels
+float32[] seen_from_rad
+float32[] seen_span_rad
+---
+string phase
