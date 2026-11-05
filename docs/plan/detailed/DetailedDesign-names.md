@@ -98,3 +98,6 @@
 | `camera_forward_offset_m` | m | 0 | **実測待ち**（回転軸から光学中心まで） |
 | `camera_height_offset_m` | m | 0 | **実測待ち**（昇降部の配信値から光学中心の床からの高さへ） |
 | `camera_K`・`camera_dist` | — | 偽のカメラは合成データの値 | **`WP-CAL-01` で校正** |
+| `use_fakes` | — | false | 偽の昇降機・カメラ・検出器を使う（試験・hve とつなぐ前の動作確認だけ。[-packets.md](DetailedDesign-packets.md) `WP-LOC-01`） |
+| `fake_fixture` | — | `ss_ws/src/ss_locator/tests/fixtures/proto_9265d2d.json` | 偽のカメラ・検出器の材料（`WP-EST-01`） |
+| `fake_scene` | — | 0 | 材料のどのシーンを使うか |

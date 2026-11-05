@@ -11,8 +11,10 @@
 | `WP-EST-01` | 推定の移植（幾何・組み立て） | `WP-ENV-01` | できる |
 | `WP-DET-01` | 検出と CPU の処理時間（`SS-V3`） | `WP-ENV-01` | できる（`WP-EST-01` と並べてよい） |
 | `WP-EST-02` | 返す盤への変換・走査の計画 | `WP-EST-01` | できる |
-| `WP-LOC-01` | 依頼の流れとノード（偽の hve で動く） | `WP-EST-02`・`WP-DET-01` | できる |
-| `WP-HVE-01` | hve-system とつなぐ | `WP-LOC-01` | **待ち**（[-core.md](DetailedDesign-core.md) §6） |
+| `WP-LOC-01` | 依頼の流れ（純関数）と偽の hve | `WP-EST-02`・`WP-DET-01` | できる |
+| `WP-LOC-02` | ノード（ROS 2 の配線） | `WP-LOC-01` | できる |
+| `WP-EST-03` | 位置の大きな誤差の出どころ（調べるだけ） | `WP-EST-02` | できる |
+| `WP-HVE-01` | hve-system とつなぐ | `WP-LOC-02` | **待ち**（[-core.md](DetailedDesign-core.md) §6） |
 | `WP-CAL-01` | カメラの内部パラメータの校正 | `WP-ENV-01` | **待ち**（hve のカメラで撮ったチェッカーボードの画像） |
 
 先行試作は `../../lifting-lug-pose` の `9265d2d`。**試作のリポジトリは読むだけで、書き換えない。**
@@ -108,19 +110,63 @@ docker run --rm -v "$PWD":/ws -v <試作>/data:/proto_data:ro ss-system:dev \
 | `test_no_lugs_vs_ungrouped` | 金具が 0 個なら `no_lugs`、1 個以上で盤が 0 面なら `lugs_ungrouped` |
 | `test_diagonal_pair` | 対角の金具 2 個の盤を返し、`yaw_std_deg` が 90・`front_known` が false・中心が 2 個の中点 |
 
-## `WP-LOC-01` 依頼の流れとノード
+## `WP-LOC-01` 依頼の流れ（純関数）と偽の hve
 
-**読む節**: [-core.md](DetailedDesign-core.md) §5、[-locate.md](DetailedDesign-locate.md) 全部。
+**読む節**: [-core.md](DetailedDesign-core.md) §5・§6、[-locate.md](DetailedDesign-locate.md) §2・§3、[-names.md](DetailedDesign-names.md) §3・§5。
 
 | やること | 中身 |
 | --- | --- |
-| `locate_core.py` | [-core.md](DetailedDesign-core.md) §5 の状態遷移。ROS 2 を読み込まない |
-| `fakes.py` | 偽の昇降機（目標の高さへ一定の速さで動く・上限の高さ・拒否・人の割り込みを起こせる）、偽のカメラ（ヨー・ピッチを受け、`robot_v3_test` の 1 シーンの、そのヨーに最も近い画像と姿勢を返す・画像を返さない・再起動を起こせる） |
-| `locator_node.py` | アクション・`cleanup_done`・`status` と `locate_core`・`detector`・`fakes` の配線。起動の引数で偽を選ぶ（本物は `WP-HVE-01`） |
+| `locate_core.py` | [-core.md](DetailedDesign-core.md) §5 の状態遷移。ROS 2・ultralytics を読み込まない。**時刻と出来事を受けて、命令の並びを返すだけ**（下の表）。画像の検出と金具を床に戻す処理は呼ばない（つなぐ層が行い、結果の金具を出来事として渡す） |
+| `fakes.py` | 偽の昇降機・偽のカメラ・偽の検出器（下の表）。純 Python |
+
+**`locate_core` の出来事と命令**（名前は Python の型名。ここに無いものは作らない）:
+
+| 向き | 名前 | 中身 |
+| --- | --- | --- |
+| 出来事 | `GoalRequest` | 依頼 4 つの値。受け付けの判定（[-locate.md](DetailedDesign-locate.md) §2.1）は `accept(goal, now)` が返す（受けた／拒否の理由） |
+| 出来事 | `Cancel` | 取り消し |
+| 出来事 | `LiftState` | 昇降部の高さ（配信値）・目標に着いたか・止まった理由の種類（`none`／`ceiling`（天井などで上がれない）／`refused`／`human`） |
+| 出来事 | `CameraState` | 今のヨー・ピッチの目標角、再起動した印 |
+| 出来事 | `FrameDone` | 撮って検出し床に戻した結果: そのときのヨーと金具の観測（`assemble.lift` の出力）。失敗なら `ok: false` |
+| 出来事 | `Tick` | 時刻だけ |
+| 命令 | `LiftGoto(height_m)`・`LiftRelease` | 昇降部へ |
+| 命令 | `CameraPoint(yaw_rad, pitch_down_rad)`・`CameraRelease`・`RequestFrame` | カメラモジュールへ（`RequestFrame` は向けて `settle_s` 待ったあと） |
+| 命令 | `SendFeedback(phase)`・`SendResult(reason, panels, seen_from, seen_span)`・`SendCleanupDone(reason, lift_restored)` | 依頼する側へ。`panels` は `panels.to_panel_top` の dict |
+
+**偽の hve と検出器**（`fakes.py`）:
+
+| 名前 | 中身 |
+| --- | --- |
+| `FakeLift` | 目標の高さへ一定の速さ（既定 0.2 m/s）で動き、着いたら `arrived`。上限の高さ（既定 なし）を超える目標では上限で止まり `ceiling`。`refuse=True` なら `refused`。`take_over()` で `human` |
+| `FakeCamera` | 材料 `proto_9265d2d.json` の 1 シーンを持つ。`point(yaw, pitch)` を受け、`capture()` で**そのシーンの視点のうち、カメラの向き（`T` の z 軸の方位）がヨーに最も近いもの**を返す（`K`・`dist`・`T`・視点の番号）。`fail=True` なら返さない。`restart()` で再起動の印を立て、ピッチの目標角を 0 にする |
+| `FakeDetector` | 視点の番号を受け、材料のその視点の検出（`kp`・`conf`）を返す |
+
+偽の外部パラメータは材料の `T` をそのまま使う（`base_link` = 試作のワールド）。**本物のカメラでは `geometry.camera_T` で作る。偽のときだけ材料の `T` を使う分岐は、つなぐ層（`WP-LOC-02`）の 1 か所に置く。**
 
 | 試験 | 確かめること |
 | --- | --- |
-| `test_core_*` | 拒否の 4 種、9 種の `reason` それぞれへ至る道筋、途中で終わってもそれまでの盤を返す、後片付けで昇降機の高さ・ヨー・ピッチを受け付け時の値へ戻す、`human_override` ではどれも戻さない、後片付けの上限、再起動のあいだの画像を捨てる |
+| `test_core_reject_*` | 拒否の 4 種（`bad_range`・`bad_distance`・`bad_time_limit`・`busy`（実行中と後片付け中の両方）） |
+| `test_core_reason_*` | 9 種の `reason` それぞれへ至る道筋（偽の昇降機・カメラ・検出器と組んで回す） |
+| `test_core_partial` | 時間切れ・取り消し・人の割り込みでも、それまでに撮った分の盤と見た範囲を返す |
+| `test_core_cleanup_restores` | 後片付けで昇降機の高さ・ヨー・ピッチを受け付け時の値へ戻す命令を出し、`SendCleanupDone` は `SendResult` のあとに 1 回だけ |
+| `test_core_human_no_restore` | `human_override` では `LiftGoto`・`CameraPoint` を出さずに手を離す |
+| `test_core_cleanup_timeout` | 後片付けが `cleanup_timeout_s` を過ぎたら手を離し `lift_restored: false` |
+| `test_core_restart_discards` | 再起動の印のあいだに来た `FrameDone` を捨て、そのヨーを撮り直す |
+| `test_core_end_to_end_fixture` | 材料の 1 シーンで全周を依頼し、`completed` と 1 面以上の盤が返る |
+
+**変異チェック（実装管理担当が自分で回す）**: `locate_core.py` の中で (1) `SendCleanupDone` を `SendResult` より先に出す、(2) `human_override` で昇降機を戻す、(3) 後片付けでヨーを戻す命令を外す、(4) 後片付け中に依頼を受け付ける、のそれぞれで試験が落ちること。
+
+## `WP-LOC-02` ノード（ROS 2 の配線）
+
+**読む節**: [-locate.md](DetailedDesign-locate.md) 全部、[-core.md](DetailedDesign-core.md) §1・§5、[-names.md](DetailedDesign-names.md) §3・§5。
+
+| やること | 中身 |
+| --- | --- |
+| `locator_node.py` | アクション `/ss/locate/panels`・`/ss/locate/cleanup_done`・`/ss/locate/status` と `locate_core` の配線。`locate_core` の命令を実行し、出来事を渡す。`use_fakes` のときは `fakes.py` を使う（本物の hve は `WP-HVE-01`）。撮った画像の検出 → `assemble.lift` はここで行う |
+| `config/locator.yaml`・`setup.py` | [-names.md](DetailedDesign-names.md) §3・§5 のパラメータを全部入れ、`ros2 run ss_locator locator_node` で起動できるようにする |
+
+| 試験 | 確かめること |
+| --- | --- |
 | `test_node_cleanup_after_result` | ノードを起動し、依頼して、**結果より先に `cleanup_done` が来ない**・**受け付けた依頼に 1 回だけ来る** |
 | `test_node_busy_reject` | 実行中・後片付け中の依頼は拒否され、`last_reject_reason` が `busy` |
 | `test_node_status_period` | `status` が `status_period_ms` ごとに来る |
@@ -131,12 +177,17 @@ docker run --rm -v "$PWD":/ws -v <試作>/data:/proto_data:ro ss-system:dev \
 docker run --rm -v "$PWD":/ws ss-system:dev bash scripts/test.sh
 # 2 つ目の端末で同じコンテナに入り:
 ros2 run ss_locator locator_node --ros-args -p use_fakes:=true
-ros2 action send_goal /ss/locate/panels ss_msgs/action/LocatePanels \
-  "{azimuth_from_rad: -0.8, azimuth_span_rad: 1.6, max_distance_m: 0.0, time_limit_s: 120.0}" --feedback
+ros2 action send_goal /ss/locate/panels ss_msgs/action/LocatePanels   "{azimuth_from_rad: -3.14, azimuth_span_rad: 6.28, max_distance_m: 0.0, time_limit_s: 120.0}" --feedback
 ros2 topic echo /ss/locate/cleanup_done
 ```
 
-**変異チェック（実装管理担当が自分で回す）**: `locator_node.py` の中で (1) `cleanup_done` を出す呼び出しを結果を返す前に移す、(2) `human_override` で昇降機を戻す、(2b) 後片付けでヨーを戻す命令を外す、(3) 実行中でも依頼を受け付ける、のそれぞれで試験が落ちること。
+**変異チェック（実装管理担当が自分で回す）**: `locator_node.py` の中で (1) `cleanup_done` を出す呼び出しを結果を返す前に移す、(2) 実行中でも依頼を受け付ける、のそれぞれで試験が落ちること。
+
+## `WP-EST-03` 位置の大きな誤差の出どころ（調べるだけ）
+
+**読む節**: [source/std-check.md](../source/std-check.md)、[-core.md](DetailedDesign-core.md) §4。
+
+`tools/check_std.py` の結果のうち、位置の誤差 ÷ `pos_std_m` が 2 を超える盤を、金具の数（2／3／4）・対角か・正面が分かるか・カメラからの距離・誤差の向き（基準の辺に沿う／直交）で分けて数え、`docs/plan/source/std-check.md` に足す。**式は変えない。**結果を見て、確からしさの式を直すかを決める（[-open.md](DetailedDesign-open.md) §1 の 5）。
 
 ## `WP-HVE-01` hve-system とつなぐ（待ち）
 
