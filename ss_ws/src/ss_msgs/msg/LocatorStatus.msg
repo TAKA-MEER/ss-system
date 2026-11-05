@@ -1,0 +1,5 @@
+std_msgs/Header header
+string interface_version
+string phase
+unique_identifier_msgs/UUID goal_id
+string last_reject_reason
