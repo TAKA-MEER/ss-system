@@ -76,6 +76,7 @@
 | `scripts/test.sh` | コンテナの中で `colcon build` と `pytest` | 入れる |
 | `tools/` | `make_proto_fixture.py`（試作の環境で回す）・`measure_cpu_time.py`・`check_std.py` | 入れる |
 | `ss_ws/src/ss_locator/ss_locator/` | `geometry.py`・`assemble.py`・`panels.py`・`scan_plan.py`・`locate_core.py`・`detector.py`・`fakes.py`・`locator_node.py`・（待ち）`hve_lift.py`・`hve_camera.py`（[-core.md](DetailedDesign-core.md) §1） | 入れる |
+| `ss_ws/src/ss_locator/config/locator.yaml` | §3・§5 のパラメータの既定値（ROS 2 のパラメータファイル。ノード名 `locator_node` の下）。純関数の層はこれを読まず、値を引数で受ける | 入れる |
 | `ss_ws/src/ss_locator/tests/fixtures/proto_9265d2d.json` | 試作の出力（回帰試験の正解。`WP-EST-01`） | 入れる |
 | `docs/plan/source/cpu-time.md`・`std-check.md` | 測った結果（`WP-DET-01`・`WP-EST-02`） | 入れる |
 
@@ -84,7 +85,7 @@
 | パラメータ | 単位 | 既定 | 出どころ |
 | --- | --- | --- | --- |
 | `model_file` | — | `model/lug_v3_s.pt` | 試作の今のモデル（[source/lifting-lug-pose.md](../source/lifting-lug-pose.md) §1） |
-| `model_sha256` | — | 試作の `models/lug_v3_s.pt` の SHA-256（`WP-DET-01` で書き込む） | 試作 |
+| `model_sha256` | — | `5a4689a9d49d549f61dddb1f2fb375583e2a98ca0333791776e6b140f4e83227` | 試作の `models/lug_v3_s.pt`（`9265d2d` の時点。2026-11-05 実装管理担当が計算） |
 | `detect_imgsz` | px | 1280 | 試作の評価（`eval_lug.py`） |
 | `detect_conf` | — | 0.25 | 試作の評価（`eval_lug.py`。[source/lifting-lug-pose.md](../source/lifting-lug-pose.md) §4） |
 | `scan_camera_height_m` | m | 3.10 | [Spec.md](../spec/Spec.md) §1.2（床から約 2.95〜3.25 m の中央） |
