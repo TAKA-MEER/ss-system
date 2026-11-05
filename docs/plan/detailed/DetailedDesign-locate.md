@@ -90,6 +90,8 @@
 | `timeout` | 時間切れ | 戻す |
 | `human_override` | 人の操作で中断 | **戻さない**（手を離すだけ） |
 
+後片付けでは、昇降機と一緒に**カメラのヨー・ピッチも依頼を受ける前の向きに戻す**（`human_override` では戻さない。[Spec.md](../spec/Spec.md) §1.1。2026-11-05 ユーザー決定）。口の形は変えない。
+
 ## 3. 後片付けの完了 `CleanupDone.msg`
 
 | フィールド | 型 | 意味 |
@@ -97,7 +99,7 @@
 | `header` | std_msgs/Header | 出した時刻 |
 | `goal_id` | unique_identifier_msgs/UUID | 対応する依頼（アクションの goal UUID） |
 | `reason` | string | その依頼の結果の `reason` と同じ値 |
-| `lift_restored` | bool | 昇降機を元の高さに戻したか（`human_override` と、戻せなかった `lift_refused` は false） |
+| `lift_restored` | bool | 昇降機を元の高さに戻したか（`human_override` と、戻せなかった `lift_refused` は false）。**カメラの向きを戻せたかは含めない** |
 
 - **受け付けた依頼には、必ず 1 回だけ出す。**結果を返したあとに出す（結果より先には出さない）。拒否した依頼には出さない。
 - QoS: reliable・transient_local・depth 10（依頼する側が繋ぎ直しても、最近の完了を取りこぼさない）。

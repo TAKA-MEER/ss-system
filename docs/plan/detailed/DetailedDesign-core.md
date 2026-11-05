@@ -88,7 +88,7 @@
 確からしさの 2 つの式は**案**。合成データで、推定の誤差と比べて当てはまるかを確かめる（`WP-EST-02`）。
 
 **返す盤の絞り込み**: 中心の方位角が依頼の範囲に入り、`base_link` の原点からの水平距離が `max_distance_m` 以下の盤だけを返す。
-**金具が対角の 2 個だけの盤**（向き・幅が決まらない）の扱いは**未定**（[-open.md](DetailedDesign-open.md) §1）。
+**金具が対角の 2 個だけの盤**（試作の `fit` が `diagonal` を付けたもの）も返す（[Spec.md](../spec/Spec.md) §1.1。2026-11-05 ユーザー決定）。中心は 2 個の中点、幅・奥行は試作どおり 2 個の距離 ÷ √2、`yaw_rad` は上の規則で選んだ辺、**`yaw_std_deg` は 90**、`front_known` は false。
 
 `reason` の `no_lugs` と `lugs_ungrouped` の区別は、**範囲内で金具が 1 個でも床に戻せたか**で決める（[-locate.md](DetailedDesign-locate.md) §2.4）。
 
@@ -99,11 +99,11 @@
 
 | 段 | やること | 次へ | 途中で終わる |
 | --- | --- | --- | --- |
-| 受け付け | 依頼を確かめる（[-locate.md](DetailedDesign-locate.md) §2.1）。**今の昇降機の高さを「元の高さ」として覚える** | `RAISING` | 拒否（何も動かさない） |
+| 受け付け | 依頼を確かめる（[-locate.md](DetailedDesign-locate.md) §2.1）。**今の昇降機の高さ・カメラのヨー・ピッチの目標角を「元の高さ・向き」として覚える** | `RAISING` | 拒否（何も動かさない） |
 | `RAISING` | 昇降機を `scan_camera_height_m` に合わせる高さへ動かす | 着いた → `SCANNING` | 光学中心が `min_camera_height_m` に届かないまま止まった（天井など）→ `camera_too_low`。拒否・動かない → `lift_refused` |
 | `SCANNING` | 撮るヨーの順に: ヨーとピッチを向ける → `settle_s` 待つ → 静止画を 1 枚要求 → 検出 → 金具を床に戻す | 全部撮った → `ESTIMATING` | 画像が `image_timeout_s` 来ない → `no_image`。**カメラモジュールが再起動したと知らせたあいだの画像は捨てて撮り直す**（ピッチの目標角が 0° に戻るため。hve の答え。[Spec-open.md](../spec/Spec-open.md) §3 2026-11-05） |
 | `ESTIMATING` | 撮った画像の金具をまとめて組み立て、返す盤に直す（§4） | 結果を返す → `CLEANING` | — |
-| `CLEANING` | 昇降機を元の高さへ戻す（`human_override` では戻さない）。カメラと昇降機から手を離す | 後片付けの完了を出す → `IDLE` | `cleanup_timeout_s` を過ぎた → 手を離して `lift_restored: false` |
+| `CLEANING` | 昇降機を元の高さへ、カメラのヨー・ピッチを元の向きへ戻す（`human_override` ではどれも戻さない）。カメラと昇降機から手を離す | 後片付けの完了を出す → `IDLE` | `cleanup_timeout_s` を過ぎた → 手を離して `lift_restored: false` |
 
 **どの段にいても**、次のときはその場で止め、それまでの金具で組み立てて結果を返し、`CLEANING` へ行く:
 
@@ -113,7 +113,7 @@
 | 依頼を受け付けてから `time_limit_s` を過ぎた | `timeout` |
 | hve-system が「人に取って代わられた・人の操作」を知らせた | `human_override`（昇降機を戻さない） |
 
-ヨーとピッチは後片付けで元に戻さない（**未定**。[-open.md](DetailedDesign-open.md) §1）。
+元のヨーは、ヨーの向きが読めるようになるまで偽のカメラが返す値を使う（hve `H-A11`。[-open.md](DetailedDesign-open.md) §1）。
 
 ## 6. hve-system とつなぐ部分（待ち）
 

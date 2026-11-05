@@ -106,6 +106,7 @@ docker run --rm -v "$PWD":/ws -v <試作>/data:/proto_data:ro ss-system:dev \
 | `test_scan_yaws` | 幅が `hfov` 以下で 1 枚。幅 90°・`hfov` 60°・重なり 10% で、両端が範囲に合い、隣どうしの間隔が `step` 以下。全周で等間隔 |
 | `test_seen_ranges` | 撮れた画像だけから見た方向の範囲を作り、重なりをまとめ、依頼の範囲で切る |
 | `test_no_lugs_vs_ungrouped` | 金具が 0 個なら `no_lugs`、1 個以上で盤が 0 面なら `lugs_ungrouped` |
+| `test_diagonal_pair` | 対角の金具 2 個の盤を返し、`yaw_std_deg` が 90・`front_known` が false・中心が 2 個の中点 |
 
 ## `WP-LOC-01` 依頼の流れとノード
 
@@ -119,7 +120,7 @@ docker run --rm -v "$PWD":/ws -v <試作>/data:/proto_data:ro ss-system:dev \
 
 | 試験 | 確かめること |
 | --- | --- |
-| `test_core_*` | 拒否の 4 種、9 種の `reason` それぞれへ至る道筋、途中で終わってもそれまでの盤を返す、`human_override` で昇降機を戻さない、後片付けの上限、再起動のあいだの画像を捨てる |
+| `test_core_*` | 拒否の 4 種、9 種の `reason` それぞれへ至る道筋、途中で終わってもそれまでの盤を返す、後片付けで昇降機の高さ・ヨー・ピッチを受け付け時の値へ戻す、`human_override` ではどれも戻さない、後片付けの上限、再起動のあいだの画像を捨てる |
 | `test_node_cleanup_after_result` | ノードを起動し、依頼して、**結果より先に `cleanup_done` が来ない**・**受け付けた依頼に 1 回だけ来る** |
 | `test_node_busy_reject` | 実行中・後片付け中の依頼は拒否され、`last_reject_reason` が `busy` |
 | `test_node_status_period` | `status` が `status_period_ms` ごとに来る |
@@ -135,7 +136,7 @@ ros2 action send_goal /ss/locate/panels ss_msgs/action/LocatePanels \
 ros2 topic echo /ss/locate/cleanup_done
 ```
 
-**変異チェック（実装管理担当が自分で回す）**: `locator_node.py` の中で (1) `cleanup_done` を出す呼び出しを結果を返す前に移す、(2) `human_override` で昇降機を戻す、(3) 実行中でも依頼を受け付ける、のそれぞれで試験が落ちること。
+**変異チェック（実装管理担当が自分で回す）**: `locator_node.py` の中で (1) `cleanup_done` を出す呼び出しを結果を返す前に移す、(2) `human_override` で昇降機を戻す、(2b) 後片付けでヨーを戻す命令を外す、(3) 実行中でも依頼を受け付ける、のそれぞれで試験が落ちること。
 
 ## `WP-HVE-01` hve-system とつなぐ（待ち）
 
