@@ -8,7 +8,7 @@
 
 | # | 問い | 状態 |
 | --- | --- | --- |
-| 1 | 盤の位置を探す口（[-locate.md](DetailedDesign-locate.md)）を fk-system が確かめる | 案（2026-11-05）。確認待ち |
+| 1 | 盤の位置を探す口（[-locate.md](DetailedDesign-locate.md)）を fk-system が確かめる | **済み**（2026-11-05 fk-system が案のとおりと確かめた。fk は `phase` が `IDLE` でない間は機体も昇降機も動かさない。`cleanup_timeout_s` の 30 s より fk の待つ上限（60 s）が長いことを伝えた） |
 
 ## 2. 仕様書からの申し送り
 

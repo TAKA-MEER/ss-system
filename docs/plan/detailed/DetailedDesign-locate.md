@@ -1,7 +1,7 @@
 # 盤の位置を探す口（案）
 
 [DetailedDesign.md](DetailedDesign.md) の詳細。依頼する側（fk-system ほか）と本システムのあいだの ROS 2 の口。
-**状態: 案（2026-11-05）。fk-system の確認待ち。確かめが済むまで、ここの名前で実装しない。**名前の一覧は [-names.md](DetailedDesign-names.md) §2・§3。
+**状態: 2026-11-05 fk-system が確かめた（案のとおり）。**作業パケットに切るまで実装しない。名前の一覧は [-names.md](DetailedDesign-names.md) §2・§3。
 
 - 入力は [Spec.md](../spec/Spec.md) §1.1（受け取るもの・返すもの・受け渡しの細部・見た方向の範囲）と §1.2（依頼の通り道）。
 - **名前に fk・測定を入れない**（`SSD-4`・`SSD-6`。ほかのシステムからも同じ口で依頼できるようにする）。

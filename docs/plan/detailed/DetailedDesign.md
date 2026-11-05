@@ -2,7 +2,7 @@
 
 [仕様書](../spec/Spec.md) を実装できる形に落とす。読み方は [README.md](README.md)。
 
-> **2026-11-05: 盤の位置を探す口（[-locate.md](DetailedDesign-locate.md)）の案を書いた。fk-system の確認待ち。**ほかは未定。
+> **2026-11-05: 盤の位置を探す口（[-locate.md](DetailedDesign-locate.md)）の案を書き、同日 fk-system が確かめた。**ほかは未定。
 
 ---
 
