@@ -1,0 +1,6 @@
+locator_node:
+  ros__parameters:
+    model_file: model/lug_v3_s.pt
+    model_sha256: 5a4689a9d49d549f61dddb1f2fb375583e2a98ca0333791776e6b140f4e83227
+    detect_imgsz: 1280
+    detect_conf: 0.25
