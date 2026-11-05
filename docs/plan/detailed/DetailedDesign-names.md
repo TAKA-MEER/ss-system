@@ -65,3 +65,9 @@
 | `top_height_default_m` | m | 2.35 | [Spec.md](../spec/Spec.md) §1.1「高さ」 |
 | `status_period_ms` | ms | 200 | 暫定 |
 | `cleanup_timeout_s` | s | 30 | 暫定（後片付けの上限。過ぎたら手を離して `lift_restored: false`） |
+
+## 4. ファイル・ディレクトリ
+
+| パス（リポジトリ直下から） | 中身 | git |
+| --- | --- | --- |
+| `model/` | 学習済みモデル（重み）。どの重みを使うかは SHA-256 で指す（[Spec.md](../spec/Spec.md) §1.2。2026-11-05 ユーザー決定） | **入れない**（`.gitignore` に `model/` を書く） |
