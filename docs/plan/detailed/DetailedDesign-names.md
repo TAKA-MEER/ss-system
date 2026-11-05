@@ -5,7 +5,6 @@
 > **`DD-1`**: 名前を発明する余地をゼロにする。必要な名前が無いと分かったら、
 > **実装する前にこのファイルへ行を足す。**
 
-**2026-10-31 時点で空。**構成（[Spec-open.md](../spec/Spec-open.md) `SS-A1`・`SS-A4`）が決まったら §0 の命名規則から埋める。
 
 ---
 
@@ -36,6 +35,7 @@
 | パッケージ | 役割 |
 | --- | --- |
 | `ss_msgs` | 本システムの型（§3）。依頼する側が読み取り専用で取り込む（`ss_ws/src/ss_msgs`） |
+| `ss_locator` | 依頼を受けて盤の位置を返すノードと推定（[-core.md](DetailedDesign-core.md)。`ss_ws/src/ss_locator`） |
 
 ## 3. 盤の位置を探す口（[-locate.md](DetailedDesign-locate.md)。案）
 
@@ -71,3 +71,29 @@
 | パス（リポジトリ直下から） | 中身 | git |
 | --- | --- | --- |
 | `model/` | 学習済みモデル（重み）。どの重みを使うかは SHA-256 で指す（[Spec.md](../spec/Spec.md) §1.2。2026-11-05 ユーザー決定） | **入れない**（`.gitignore` に `model/` を書く） |
+| `LICENSE` | AGPL-3.0 の全文 | 入れる |
+| `docker/Dockerfile` | 開発・実機で使うイメージ `ss-system:dev`（`ros:humble` が元） | 入れる |
+| `scripts/test.sh` | コンテナの中で `colcon build` と `pytest` | 入れる |
+| `tools/` | `make_proto_fixture.py`（試作の環境で回す）・`measure_cpu_time.py`・`check_std.py` | 入れる |
+| `ss_ws/src/ss_locator/ss_locator/` | `geometry.py`・`assemble.py`・`panels.py`・`scan_plan.py`・`locate_core.py`・`detector.py`・`fakes.py`・`locator_node.py`・（待ち）`hve_lift.py`・`hve_camera.py`（[-core.md](DetailedDesign-core.md) §1） | 入れる |
+| `ss_ws/src/ss_locator/tests/fixtures/proto_9265d2d.json` | 試作の出力（回帰試験の正解。`WP-EST-01`） | 入れる |
+| `docs/plan/source/cpu-time.md`・`std-check.md` | 測った結果（`WP-DET-01`・`WP-EST-02`） | 入れる |
+
+## 5. 推定と流れのパラメータ（[-core.md](DetailedDesign-core.md)）
+
+| パラメータ | 単位 | 既定 | 出どころ |
+| --- | --- | --- | --- |
+| `model_file` | — | `model/lug_v3_s.pt` | 試作の今のモデル（[source/lifting-lug-pose.md](../source/lifting-lug-pose.md) §1） |
+| `model_sha256` | — | 試作の `models/lug_v3_s.pt` の SHA-256（`WP-DET-01` で書き込む） | 試作 |
+| `detect_imgsz` | px | 1280 | 試作の評価（`eval_lug.py`） |
+| `detect_conf` | — | 0.25 | 試作の評価（`eval_lug.py`。[source/lifting-lug-pose.md](../source/lifting-lug-pose.md) §4） |
+| `scan_camera_height_m` | m | 3.10 | [Spec.md](../spec/Spec.md) §1.2（床から約 2.95〜3.25 m の中央） |
+| `min_camera_height_m` | m | 2.95 | [Spec.md](../spec/Spec.md) §1.2（同じ範囲の下端。届かなければ `camera_too_low`） |
+| `scan_pitch_down_deg` | ° | 20 | **暫定（逆算）**: 5 m 先の金具の見下ろしは約 10°、1 m 先は約 30〜40°。そのあいだが縦の画角に入る向き。実機で決める（`SS-V2`） |
+| `scan_overlap_ratio` | — | 0.1 | **暫定**（[Spec.md](../spec/Spec.md) §1.2「少し重なる」） |
+| `settle_s` | s | 0.5 | **暫定**（向けてから撮るまで待つ。静止画は最大約 0.1 s 前のコマ: 試作 E13） |
+| `image_timeout_s` | s | 5 | **暫定** |
+| `camera_mount_x_m`・`camera_mount_y_m` | m | 0 | **実測待ち**（ヨーの回転軸の `base_link` での位置） |
+| `camera_forward_offset_m` | m | 0 | **実測待ち**（回転軸から光学中心まで） |
+| `camera_height_offset_m` | m | 0 | **実測待ち**（昇降部の配信値から光学中心の床からの高さへ） |
+| `camera_K`・`camera_dist` | — | 偽のカメラは合成データの値 | **`WP-CAL-01` で校正** |

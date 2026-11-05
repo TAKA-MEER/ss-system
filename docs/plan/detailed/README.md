@@ -3,7 +3,7 @@
 [仕様書](../spec/README.md)（`docs/plan/spec/`）を入力とし、**実装できる形に落とした設計書。**
 
 **本体は [DetailedDesign.md](DetailedDesign.md)。**
-**2026-10-31 時点で骨格のみ。**仕様書の構成の問い（[Spec-open.md](../spec/Spec-open.md) §2.2）が決まってから書く。
+**2026-11-05 時点で、依頼する側との口・中の構成・作業パケットの案がある。**
 
 ---
 
@@ -34,12 +34,13 @@
 | ファイル | 内容 | 状態 |
 | --- | --- | --- |
 | **[DetailedDesign.md](DetailedDesign.md)** | **本体。**設計方針・全体構成・作業パケットの一覧・目次 | 骨格 |
-| [DetailedDesign-names.md](DetailedDesign-names.md) | **名前辞書。**この文書に無い名前を実装で作ってはいけない | 空 |
+| [DetailedDesign-names.md](DetailedDesign-names.md) | **名前辞書。**この文書に無い名前を実装で作ってはいけない | 案 |
 | [DetailedDesign-open.md](DetailedDesign-open.md) | 未確定・申し送り・レビュー指摘管理表 | 初版 |
 | [DetailedDesign-locate.md](DetailedDesign-locate.md) | 盤の位置を探す口（依頼する側との ROS 2 の口） | 2026-11-05 fk-system が確かめた |
+| [DetailedDesign-core.md](DetailedDesign-core.md) | 中の構成と推定（層・外部パラメータ・走査・返す盤への変換・依頼の流れ） | 2026-11-05 案 |
+| [DetailedDesign-packets.md](DetailedDesign-packets.md) | 作業パケットと受け入れ条件 | 2026-11-05 案 |
 
-領域ごとのファイル（`DetailedDesign-<領域>.md`）と作業パケットの一覧（`DetailedDesign-packets.md`）は、
-仕様書の対応する章ができてから足す。
+hve-system とつなぐ部分は、hve の口が決まってから足す。
 
 ---
 

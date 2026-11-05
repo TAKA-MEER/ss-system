@@ -2,7 +2,7 @@
 
 [仕様書](../spec/Spec.md) を実装できる形に落とす。読み方は [README.md](README.md)。
 
-> **2026-11-05: 盤の位置を探す口（[-locate.md](DetailedDesign-locate.md)）の案を書き、同日 fk-system が確かめた。**ほかは未定。
+> **2026-11-05: 盤の位置を探す口（[-locate.md](DetailedDesign-locate.md)）の案を書き、同日 fk-system が確かめた。中の構成（[-core.md](DetailedDesign-core.md)）と作業パケット（[-packets.md](DetailedDesign-packets.md)）の案を書いた。**hve-system とつなぐ部分は待ち。
 
 ---
 
@@ -20,9 +20,9 @@
 | --- | --- | --- |
 | 依頼する側との口 | ROS 2 のアクション＋後片付けの完了＋生存と状態（[-locate.md](DetailedDesign-locate.md)。**案**） | [Spec.md](../spec/Spec.md) §1.1・§1.2 |
 | hve-system との口 | hve が書いたもの（[-names.md](DetailedDesign-names.md) §1） | hve `DetailedDesign-protocol-modules.md` |
-| 中の構成 | 未定（`SS-S1`。先行試作の取り込みと一緒に書く） | — |
+| 中の構成 | 純関数の層（幾何・組み立て・変換・走査・状態遷移）とつなぐ層（ROS 2・検出器・hve）。先行試作の組み立てを写し、外部パラメータを機体の昇降機・ヨー・ピッチから作る（[-core.md](DetailedDesign-core.md)。**案**） | [Spec.md](../spec/Spec.md) §1.2 |
 
 ## 3. 段階と作業パケット
 
-未定。仕様書の章ができたら、th-system と同じく**各段階の終わりに必ず「動くもの」が残る**ように切り、
-`WP-<領域>-<番号>` で番号を振る。一覧と状態は [ImplementationPlan.md](../ImplementationPlan.md) §4 に置く。
+[-packets.md](DetailedDesign-packets.md)（**案**）。th-system と同じく**各パケットの終わりに必ず「動くもの」が残る**ように切った。
+`WP-ENV-01` → `WP-EST-01`・`WP-DET-01` → `WP-EST-02` → `WP-LOC-01` は今すぐ着手できる。`WP-HVE-01`・`WP-CAL-01` は待ち。状態は [ImplementationPlan.md](../ImplementationPlan.md) §4。
