@@ -44,7 +44,15 @@ def to_panel_top(panel, lugs, top_height_m):
     if n:
         s_pos = [float(L["s_pos"]) for L in members]
         line_dist = float(np.mean([_line_dist(L, center) for L in members]))
-        pos_std_m = math.sqrt(sum(s * s for s in s_pos) / (n * n) + line_dist * line_dist)
+        var = sum(s * s for s in s_pos) / (n * n) + line_dist * line_dist
+        if panel.get("front_known", False) and not panel.get("diagonal", False):
+            # 金具 2 個で正面が分かる盤は、中心をリング面の向きから決める。その分のばらつきを足す
+            # （-core.md §4。足さないと小さすぎた: source/std-check.md）
+            r_mean = float(np.mean([np.linalg.norm(center - np.asarray(L["p"], float)) for L in members]))
+            s_axis_mean = float(np.mean([float(L["s_axis"]) for L in members]))
+            a = r_mean * math.radians(s_axis_mean)
+            var += a * a
+        pos_std_m = math.sqrt(var)
         mean_s_pos = sum(s_pos) / n
     else:
         mean_s_pos = 0.0
