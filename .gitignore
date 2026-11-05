@@ -1,5 +1,8 @@
 # 使う道具（言語・学習環境）が決まったら、その生成物をここに足す（th-system・hve-system の .gitignore が手本）
-# 学習データ・学習済みモデルをこのリポジトリに入れるかは未定（docs/plan/spec/Spec-open.md SS-S1）
+model/
+ss_ws/build/
+ss_ws/install/
+ss_ws/log/
 
 # Python
 __pycache__/

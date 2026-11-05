@@ -99,7 +99,14 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 - 作業中に判明したこのプロジェクト固有の環境の癖・落とし穴（コマンドの意外な挙動、ツールの制約など）は、ユーザーに確認せず「環境の癖」セクションに追記してよい。
 - **CLAUDE.md を更新するたびに、ファイル全体を読み直し、陳腐化した記述・重複・冗長な説明がないか見直すこと。** コンテキストを圧迫しないよう、価値の下がった記述は削除するか簡潔にまとめる。肥大化を優先して情報を積み増すだけにしない。
-- 「ビルドとテスト」「アーキテクチャ」の節は無い。**使う道具が決まり、最初の作業パケットで実物を入れてから足す。**
+- 「アーキテクチャ」の節は無い。**実装が始まったら足す。**
+
+## ビルドとテスト
+
+```bash
+docker build -t ss-system:dev -f docker/Dockerfile .
+docker run --rm -v "$PWD":/ws ss-system:dev bash scripts/test.sh
+```
 
 ## 環境の癖・注意点
 
@@ -117,3 +124,5 @@ fk-system から写した（元は th-system・hve-system で踏んだものの�
 - **opencode の質問画面（選択肢つきの確認）は、ペインが低いと入力欄が画面外に出て、`herdr agent prompt` の文字が入らない**（hve-system 2026-09-28）。`herdr pane zoom <pane> --on` で広げ、`herdr pane read --source visible` で入力欄を確かめてから `herdr pane send-text` → `herdr pane send-keys <pane> Enter` で答える。終わったら `--off` で戻す。
 - **既に opencode が動いているペインに `herdr agent start` を打たない。**`start` はシェルプロンプト待ちを期待するため、動作中のセッションに文字列を打ち込んで壊す。`herdr agent rename` だけで登録する。
 - **`pkill -f <パターン>` は自分のシェルを殺すことがある**（パターンが自分のコマンドラインにマッチする。docker の中でもホストでも）。PID 指定で止める。
+- Ubuntu 22.04 の apt 版 pip 22 は `--break-system-packages` に対応しない。pytest は実行ファイルが無い場合があるため `python3 -m pytest` を使う。
+- Windows から Docker に bind mount した `ss_ws` では colcon が clock skew の警告を出し、型定義を戻した後も古い生成物を使うことがある。必要なら `ss_ws/build/ss_msgs` と `ss_ws/install/ss_msgs` を消して再ビルドする。
