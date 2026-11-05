@@ -36,6 +36,7 @@
 | **[DetailedDesign.md](DetailedDesign.md)** | **本体。**設計方針・全体構成・作業パケットの一覧・目次 | 骨格 |
 | [DetailedDesign-names.md](DetailedDesign-names.md) | **名前辞書。**この文書に無い名前を実装で作ってはいけない | 空 |
 | [DetailedDesign-open.md](DetailedDesign-open.md) | 未確定・申し送り・レビュー指摘管理表 | 初版 |
+| [DetailedDesign-locate.md](DetailedDesign-locate.md) | 盤の位置を探す口（依頼する側との ROS 2 の口） | 案（2026-11-05）。fk-system の確認待ち |
 
 領域ごとのファイル（`DetailedDesign-<領域>.md`）と作業パケットの一覧（`DetailedDesign-packets.md`）は、
 仕様書の対応する章ができてから足す。

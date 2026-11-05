@@ -2,8 +2,7 @@
 
 [仕様書](../spec/Spec.md) を実装できる形に落とす。読み方は [README.md](README.md)。
 
-> **2026-10-31 時点で骨格のみ。**仕様書の構成の問い（[Spec-open.md](../spec/Spec-open.md) `SS-A1`・`SS-A2`・`SS-A4`）が決まるまで、
-> 設計方針（§1）のほかは何も書かない。
+> **2026-11-05: 盤の位置を探す口（[-locate.md](DetailedDesign-locate.md)）の案を書いた。fk-system の確認待ち。**ほかは未定。
 
 ---
 
@@ -17,7 +16,11 @@
 
 ## 2. 全体構成
 
-未定（`SS-A1`・`SS-A2`・`SS-A4`）。
+| 項目 | 案 | 出どころ |
+| --- | --- | --- |
+| 依頼する側との口 | ROS 2 のアクション＋後片付けの完了＋生存と状態（[-locate.md](DetailedDesign-locate.md)。**案**） | [Spec.md](../spec/Spec.md) §1.1・§1.2 |
+| hve-system との口 | hve が書いたもの（[-names.md](DetailedDesign-names.md) §1） | hve `DetailedDesign-protocol-modules.md` |
+| 中の構成 | 未定（`SS-S1`。先行試作の取り込みと一緒に書く） | — |
 
 ## 3. 段階と作業パケット
 

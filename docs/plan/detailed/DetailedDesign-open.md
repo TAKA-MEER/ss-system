@@ -6,13 +6,15 @@
 
 ## 1. 詳細設計側の未確定事項
 
-なし（仕様書の対象・構成が決まっていないため、まだ詳細設計の問いが立たない）。
+| # | 問い | 状態 |
+| --- | --- | --- |
+| 1 | 盤の位置を探す口（[-locate.md](DetailedDesign-locate.md)）を fk-system が確かめる | 案（2026-11-05）。確認待ち |
 
 ## 2. 仕様書からの申し送り
 
 | 仕様書の ID | 詳細設計で要ること |
 | --- | --- |
-| `SS-A1`・`SS-A2`・`SS-A4` | 決まり次第、[DetailedDesign.md](DetailedDesign.md) §2 と [-names.md](DetailedDesign-names.md) §0 を書く |
+| `SS-A1`・`SS-A2`・`SS-A4` | 依頼する側との口は [-locate.md](DetailedDesign-locate.md)（案）。中の構成は `SS-S1` と一緒に書く |
 
 ## 3. レビュー指摘管理表
 
