@@ -28,4 +28,3 @@ RUN python3 -m pip install \
       'ultralytics-thop>=2.2.3' \
       'opencv-python>=4.7.0,<4.12' \
       pytest
-
