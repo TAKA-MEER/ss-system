@@ -4,3 +4,27 @@ locator_node:
     model_sha256: 5a4689a9d49d549f61dddb1f2fb375583e2a98ca0333791776e6b140f4e83227
     detect_imgsz: 1280
     detect_conf: 0.25
+
+    max_distance_default_m: 5.0
+    top_height_default_m: 2.35
+    status_period_ms: 200
+    cleanup_timeout_s: 30.0
+
+    scan_camera_height_m: 3.10
+    min_camera_height_m: 2.95
+    scan_pitch_down_deg: 20.0
+    scan_overlap_ratio: 0.1
+    settle_s: 0.5
+    image_timeout_s: 5.0
+
+    camera_mount_x_m: 0.0
+    camera_mount_y_m: 0.0
+    camera_forward_offset_m: 0.0
+    camera_height_offset_m: 0.0
+    # 偽のカメラが使う合成データの値（本物は WP-CAL-01 で校正する）
+    camera_K: [1082.4794514973958, 0.0, 640.0, 0.0, 1082.4794514973958, 360.0, 0.0, 0.0, 1.0]
+    camera_dist: [-0.018133423603158887, 0.0, 0.0, 0.0, 0.0]
+
+    use_fakes: false
+    fake_fixture: ss_ws/src/ss_locator/tests/fixtures/proto_9265d2d.json
+    fake_scene: 0
