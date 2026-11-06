@@ -9,6 +9,7 @@ setup(
     data_files=[
         ("share/ament_index/resource_index/packages", ["resource/" + package_name]),
         ("share/" + package_name, ["package.xml"]),
+        ("share/" + package_name + "/config", ["config/locator.yaml"]),
     ],
     install_requires=["setuptools"],
     zip_safe=True,
@@ -17,5 +18,9 @@ setup(
     description="Panel locator node and estimation package.",
     license="AGPL-3.0-only",
     tests_require=["pytest"],
-    entry_points={"console_scripts": []},
+    entry_points={
+        "console_scripts": [
+            "locator_node = ss_locator.locator_node:main",
+        ],
+    },
 )
