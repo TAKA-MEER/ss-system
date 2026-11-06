@@ -227,6 +227,10 @@ class LocatorNode(Node):
         )
         now = time.monotonic()
         with self._lock:
+            # cleanup_done を出すまでは、依頼する側から見てまだ後片付け中
+            if self._pending_cleanup:
+                self._last_reject_reason = "busy"
+                return GoalResponse.REJECT
             reason = self._core.accept(goal, now)
             if reason is not None:
                 self._last_reject_reason = reason
@@ -408,6 +412,7 @@ class LocatorNode(Node):
         if not self._pending_cleanup:
             return
         remaining = []
+        published = False
         for goal_id, goal_uuid, reason, lift_restored in self._pending_cleanup:
             returned_at = self._result_returned_at.get(goal_id)
             # 結果が相手に届く前に cleanup_done を出さない（結果のあとに 1 回だけ）
@@ -427,18 +432,27 @@ class LocatorNode(Node):
                 self._active_goal_id = None
                 self._active_goal_uuid = None
                 self._active_handle = None
+            published = True
         self._pending_cleanup = remaining
+        if published:
+            # cleanup_done を出した時点で、依頼する側から見て IDLE に戻る
+            self._publish_status(now)
 
     # ------------------------------------------------------------------ 状態
     def _publish_status(self, now=None):
         message = LocatorStatus()
         message.header.stamp = self.get_clock().now().to_msg()
         message.interface_version = INTERFACE_VERSION
-        message.phase = self._core.state
-        if self._core.state != LocateCore.IDLE and self._active_goal_uuid is not None:
-            message.goal_id = self._active_goal_uuid
+        if self._pending_cleanup:
+            # cleanup_done を出すまでは、phase も goal_id も後片付け中のまま見せる
+            message.phase = LocateCore.CLEANING
+            message.goal_id = self._pending_cleanup[0][1]
         else:
-            message.goal_id = UUID()
+            message.phase = self._core.state
+            if message.phase != LocateCore.IDLE and self._active_goal_uuid is not None:
+                message.goal_id = self._active_goal_uuid
+            else:
+                message.goal_id = UUID()
         message.last_reject_reason = self._last_reject_reason
         self._status_pub.publish(message)
         self._last_published_phase = self._core.state
