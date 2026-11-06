@@ -176,7 +176,9 @@ class LocateCore:
             return "busy"
 
         span = float(goal.azimuth_span_rad)
-        if not math.isfinite(span) or span <= 0.0 or span > TAU + 1e-9:
+        # 依頼の幅は float32。2π は float32 にすると TAU より約 1.7e-7 大きくなるので、
+        # その分を許す（全周の依頼を bad_range で弾かない）
+        if not math.isfinite(span) or span <= 0.0 or span > TAU + 1e-6:
             return "bad_range"
 
         distance = float(goal.max_distance_m)
