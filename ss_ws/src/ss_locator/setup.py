@@ -21,6 +21,7 @@ setup(
     entry_points={
         "console_scripts": [
             "locator_node = ss_locator.locator_node:main",
+            "lug_demo = ss_locator.lug_demo:main",
         ],
     },
 )
