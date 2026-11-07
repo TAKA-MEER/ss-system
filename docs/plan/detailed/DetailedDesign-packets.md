@@ -207,8 +207,8 @@ hve のカメラで 1280×720 のチェッカーボードの静止画が撮れ�
 | 検出 | `detector.py` に `detect_with_boxes` を足し、`detect` をそれの最初の 2 つを返す形にする（`detect` の結果は変えない） |
 | 純関数 | `demo_view.py`（[-demo.md](DetailedDesign-demo.md) §2） |
 | つなぐ | `lug_demo.py`（§1・§3）と、`setup.py` の `lug_demo` |
-| Docker | `cv2.imshow` がコンテナから X に出せるよう、要る apt パッケージを `docker/Dockerfile` に足す。足したものをパケットの報告に書く |
-| 試験 | `tests/test_demo_view.py`・`tests/test_lug_demo.py`（下の表）。偽の検出器とメモリの中のコマで回す。学習済みモデルは使わない |
+| Docker | `cv2.imshow` がコンテナから X に出せるよう、要る apt パッケージと、画面の無いところで画面ありの経路を試すための `xvfb` を `docker/Dockerfile` に足す。**OpenCV の wheel は 1 つだけにする**（`opencv-python-headless` が並ぶと `imshow` が黙って動かない）。足したものをパケットの報告に書く |
+| 試験 | `tests/test_demo_view.py`・`tests/test_lug_demo.py`（下の表）。偽の検出器とメモリの中のコマで回す。**学習済みモデルは使わない**（`main` を通す試験では `Detector` を偽物に差し替え、SHA-256 の照合に当てない）。**時間に頼る試験を作らない**（実時間の待ちではなく、偽の検出器が呼ばれるたびに入力へコマを足す形で捨て方を確かめる） |
 
 **受け入れ条件**:
 
@@ -220,15 +220,25 @@ docker run --rm -v "$PWD":/ws ss-system:dev bash -c \
   "cd /ws/ss_ws && colcon build && . install/setup.bash && cd /ws && \
    mkdir -p .briefs/tmp/demo && python3 -c 'import cv2,numpy as n; [cv2.imwrite(f\".briefs/tmp/demo/{i}.png\", n.zeros((480,640,3),n.uint8)) for i in range(3)]' && \
    ros2 run ss_locator lug_demo --source .briefs/tmp/demo --headless"
+# 画面ありの経路（Xvfb の上で。モデルがあるときだけ。0 で終わる）
+docker run --rm -v "$PWD":/ws ss-system:dev bash -c \
+  "cd /ws/ss_ws && colcon build && . install/setup.bash && cd /ws && \
+   xvfb-run -a ros2 run ss_locator lug_demo --source .briefs/tmp/demo --max-frames 3"
+docker run --rm ss-system:dev python3 -c \
+  "import cv2; assert 'GTK' in cv2.getBuildInformation() or 'QT' in cv2.getBuildInformation().upper()"
+docker run --rm ss-system:dev bash -c "python3 -m pip list 2>/dev/null | grep -ci '^opencv'"   # 1
 ```
+
+**モデルが要る 2 つのコマンドは、実装管理担当が回す**（`model/` は git に入らず、エージェントの worktree には無い。`model/lug_v3_s.pt` を `model_sha256` と照合して置いてから）。
 
 | 試験 | 確かめること |
 | --- | --- |
 | `test_fit_to_canvas_sizes` | 640×480 → 倍率 1.5・余白 x 160 ／ 1920×1080 → 倍率 2/3・余白なし ／ 1280×720 → そのまま ／ 縦長 720×1280 → 余白 x。どれも出力は 1280×720 |
 | `test_fit_to_canvas_keeps_aspect` | 入力に描いた正方形が、出力でも縦横の差 1 px 以内の正方形 |
 | `test_draw_lugs_does_not_modify_input` | `draw_lugs` は渡した `canvas` を書き換えない。金具 0 個でも描ける |
+| `test_draw_lugs_draws_marks` | 一様な灰色の `canvas` に金具 1 個を描くと、枠の辺の上・キーポイント 4 点の位置・左上の `info` の領域の画素が入力と違う（**何も描かずに写しを返す変異を落とす**） |
 | `test_latest_frame_keeps_newest` | `put` を 1・2・3 の順 → `take` は 3、`dropped` は 2。空の `take` は `timeout_s` 後に `None`。`close` 後は `None` |
-| `test_run_demo_skips_stale_frames` | コマを 100 fps で作り続ける入力と、1 回 50 ms かかる偽の検出器で、推定したコマの通し番号が増える一方で飛びがあり、`dropped` が 0 より大きい |
+| `test_run_demo_skips_stale_frames` | 偽の検出器が呼ばれるたびに入力へコマを 3 つ足す形で、推定したコマの通し番号が増える一方で飛びがあり（推定したのは足した 3 つのうち最後のもの）、`dropped` が 0 より大きい |
 | `test_run_demo_draws_on_inferred_frame` | 偽の検出器が受け取ったコマと、`show` に渡った画像の下地（描いていない部分）が同じコマ |
 | `test_folder_source_in_order_no_drop` | フォルダの画像（大文字の拡張子・画像でないファイルを混ぜる）を名前順に全部推定し、画像でないものは読まない。`dropped` は 0 |
 | `test_conf_reaches_detector` | `main` に `--conf 0.6` を渡すと `Detector` の `conf` が 0.6。渡さないと `locator.yaml` の `detect_conf` と同じ |
