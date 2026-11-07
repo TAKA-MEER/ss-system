@@ -7,6 +7,7 @@
 from __future__ import annotations
 
 import os
+import shutil
 import subprocess
 from pathlib import Path
 
@@ -134,3 +135,65 @@ def test_repo_root_from_anywhere(tmp_path) -> None:
     lines = _lines(_run(["--headless"], work, dev))
 
     assert f"{REPO_ROOT}:/ws" in lines
+
+
+def _fake_command(path, body):
+    path.write_text("#!/usr/bin/env bash\nset -eu\n" + body, encoding="utf-8")
+    path.chmod(0o755)
+
+
+def test_real_path_calls_same_docker_args(tmp_path) -> None:
+    root = tmp_path / "repo"
+    (root / "scripts").mkdir(parents=True)
+    shutil.copy2(SCRIPT, root / "scripts" / "demo.sh")
+    (root / "model").mkdir()
+    (root / "model" / "lug_v3_s.pt").write_bytes(b"weights")
+    (root / "in").mkdir()
+
+    bin_dir = tmp_path / "bin"
+    bin_dir.mkdir()
+    docker_log = tmp_path / "docker.log"
+    xhost_log = tmp_path / "xhost.log"
+    _fake_command(
+        bin_dir / "docker",
+        'if [ "${1:-}" = image ]; then exit 0; fi\n'
+        "printf '%s\\n' \"$@\" > \"$SS_FAKE_DOCKER_LOG\"\n",
+    )
+    _fake_command(
+        bin_dir / "xhost",
+        "printf '%s\\n' \"$@\" > \"$SS_FAKE_XHOST_LOG\"\n",
+    )
+
+    env = os.environ.copy()
+    env.pop("SS_DEMO_DEV_DIR", None)
+    env["DISPLAY"] = ":0"
+    env["PATH"] = f"{bin_dir}:{env['PATH']}"
+    env["SS_FAKE_DOCKER_LOG"] = str(docker_log)
+    env["SS_FAKE_XHOST_LOG"] = str(xhost_log)
+
+    args = ["--source", "in", "--max-frames", "2"]
+    script = str(root / "scripts" / "demo.sh")
+
+    dry = subprocess.run(
+        [script, "--dry-run", *args],
+        cwd=str(root),
+        env=env,
+        capture_output=True,
+        text=True,
+    )
+    assert dry.returncode == 0, dry.stderr
+    expected = dry.stdout.splitlines()[1:]
+
+    real = subprocess.run(
+        [script, *args],
+        cwd=str(root),
+        env=env,
+        capture_output=True,
+        text=True,
+    )
+    assert real.returncode == 0, real.stderr
+
+    received = docker_log.read_text(encoding="utf-8").splitlines()
+    assert received == expected
+    assert received[0] == "run"
+    assert xhost_log.read_text(encoding="utf-8").splitlines() == ["+local:docker"]

@@ -75,24 +75,24 @@ else
   fi
 fi
 
-run_args=(run --rm)
+cmd=(docker run --rm)
 if [ -t 0 ]; then
-  run_args+=(-it)
+  cmd+=(-it)
 fi
 if [ "$headless" -eq 0 ]; then
   if [ "$dry_run" -eq 0 ] && [ -z "${DISPLAY:-}" ]; then
     echo "DISPLAY is not set; use --headless if you do not need the window" >&2
     exit 1
   fi
-  run_args+=(-e DISPLAY -v /tmp/.X11-unix:/tmp/.X11-unix)
+  cmd+=(-e DISPLAY -v /tmp/.X11-unix:/tmp/.X11-unix)
 fi
-run_args+=("${mount_args[@]}" -v "$repo_root:/ws")
+cmd+=("${mount_args[@]}" -v "$repo_root:/ws")
 
 inner='cd /ws/ss_ws && colcon build >/dev/null 2>&1 && . install/setup.bash && cd /ws && exec ros2 run ss_locator lug_demo "$@"'
-run_args+=(ss-system:dev bash -c "$inner" _ "${args[@]}")
+cmd+=(ss-system:dev bash -c "$inner" _ "${args[@]}")
 
 if [ "$dry_run" -eq 1 ]; then
-  printf '%s\n' docker "${run_args[@]}"
+  printf '%s\n' "${cmd[@]}"
   exit 0
 fi
 
@@ -109,4 +109,4 @@ if [ "$headless" -eq 0 ] && command -v xhost >/dev/null 2>&1; then
   xhost +local:docker
 fi
 
-exec docker run "${run_args[@]}"
+exec "${cmd[@]}"
