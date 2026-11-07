@@ -16,6 +16,7 @@
 | `WP-EST-03` | 位置の大きな誤差の出どころ（調べるだけ） | `WP-EST-02` | できる |
 | `WP-HVE-01` | hve-system とつなぐ | `WP-LOC-02` | **待ち**（[-core.md](DetailedDesign-core.md) §6） |
 | `WP-CAL-01` | カメラの内部パラメータの校正 | `WP-ENV-01` | **待ち**（hve のカメラで撮ったチェッカーボードの画像） |
+| `WP-DEMO-01` | 金具認識のリアルタイム表示（本番外の道具） | `WP-DET-01` | できる |
 
 先行試作は `../../lifting-lug-pose` の `9265d2d`。**試作のリポジトリは読むだけで、書き換えない。**
 
@@ -196,3 +197,40 @@ ros2 topic echo /ss/locate/cleanup_done
 ## `WP-CAL-01` カメラの内部パラメータの校正（待ち）
 
 hve のカメラで 1280×720 のチェッカーボードの静止画が撮れるようになったら書く。OpenCV で `K`・`k1`・`k2` を求め、パラメータファイルに書く。
+
+## `WP-DEMO-01` 金具認識のリアルタイム表示（本番外の道具）
+
+**読む節**: [-demo.md](DetailedDesign-demo.md) 全部、[-names.md](DetailedDesign-names.md) §5・§6。
+
+| やること | 中身 |
+| --- | --- |
+| 検出 | `detector.py` に `detect_with_boxes` を足し、`detect` をそれの最初の 2 つを返す形にする（`detect` の結果は変えない） |
+| 純関数 | `demo_view.py`（[-demo.md](DetailedDesign-demo.md) §2） |
+| つなぐ | `lug_demo.py`（§1・§3）と、`setup.py` の `lug_demo` |
+| Docker | `cv2.imshow` がコンテナから X に出せるよう、要る apt パッケージを `docker/Dockerfile` に足す。足したものをパケットの報告に書く |
+| 試験 | `tests/test_demo_view.py`・`tests/test_lug_demo.py`（下の表）。偽の検出器とメモリの中のコマで回す。学習済みモデルは使わない |
+
+**受け入れ条件**:
+
+```bash
+docker build -t ss-system:dev -f docker/Dockerfile .
+docker run --rm -v "$PWD":/ws ss-system:dev bash scripts/test.sh          # 0 で終わる（今までの試験も通る）
+# 合成のフォルダを --headless で回す（モデルがあるときだけ。行が 3 行出て 0 で終わる）
+docker run --rm -v "$PWD":/ws ss-system:dev bash -c \
+  "cd /ws/ss_ws && colcon build && . install/setup.bash && cd /ws && \
+   mkdir -p .briefs/tmp/demo && python3 -c 'import cv2,numpy as n; [cv2.imwrite(f\".briefs/tmp/demo/{i}.png\", n.zeros((480,640,3),n.uint8)) for i in range(3)]' && \
+   ros2 run ss_locator lug_demo --source .briefs/tmp/demo --headless"
+```
+
+| 試験 | 確かめること |
+| --- | --- |
+| `test_fit_to_canvas_sizes` | 640×480 → 倍率 1.5・余白 x 160 ／ 1920×1080 → 倍率 2/3・余白なし ／ 1280×720 → そのまま ／ 縦長 720×1280 → 余白 x。どれも出力は 1280×720 |
+| `test_fit_to_canvas_keeps_aspect` | 入力に描いた正方形が、出力でも縦横の差 1 px 以内の正方形 |
+| `test_draw_lugs_does_not_modify_input` | `draw_lugs` は渡した `canvas` を書き換えない。金具 0 個でも描ける |
+| `test_latest_frame_keeps_newest` | `put` を 1・2・3 の順 → `take` は 3、`dropped` は 2。空の `take` は `timeout_s` 後に `None`。`close` 後は `None` |
+| `test_run_demo_skips_stale_frames` | コマを 100 fps で作り続ける入力と、1 回 50 ms かかる偽の検出器で、推定したコマの通し番号が増える一方で飛びがあり、`dropped` が 0 より大きい |
+| `test_run_demo_draws_on_inferred_frame` | 偽の検出器が受け取ったコマと、`show` に渡った画像の下地（描いていない部分）が同じコマ |
+| `test_folder_source_in_order_no_drop` | フォルダの画像（大文字の拡張子・画像でないファイルを混ぜる）を名前順に全部推定し、画像でないものは読まない。`dropped` は 0 |
+| `test_conf_reaches_detector` | `main` に `--conf 0.6` を渡すと `Detector` の `conf` が 0.6。渡さないと `locator.yaml` の `detect_conf` と同じ |
+| `test_main_writes_no_files` | 一時ディレクトリを作業場所にしてフォルダを `--headless` で回すと、一時ディレクトリにも入力のフォルダにも新しいファイルができない |
+| `test_detect_with_boxes_matches_detect` | 偽の YOLO の結果で、`detect` の結果が `detect_with_boxes` の最初の 2 つと同じ。検出 0 個で枠は (0,4) |

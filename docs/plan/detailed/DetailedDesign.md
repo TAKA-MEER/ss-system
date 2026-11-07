@@ -25,4 +25,4 @@
 ## 3. 段階と作業パケット
 
 [-packets.md](DetailedDesign-packets.md)（**案**）。th-system と同じく**各パケットの終わりに必ず「動くもの」が残る**ように切った。
-`WP-ENV-01` → `WP-EST-01`・`WP-DET-01` → `WP-EST-02` → `WP-LOC-01` は今すぐ着手できる。`WP-HVE-01`・`WP-CAL-01` は待ち。状態は [ImplementationPlan.md](../ImplementationPlan.md) §4。
+`WP-ENV-01` → `WP-EST-01`・`WP-DET-01` → `WP-EST-02` → `WP-LOC-01` は今すぐ着手できる。`WP-HVE-01`・`WP-CAL-01` は待ち。本番外の道具 `WP-DEMO-01`（金具認識のリアルタイム表示。[-demo.md](DetailedDesign-demo.md)。2026-11-08 案）は今すぐ着手できる。状態は [ImplementationPlan.md](../ImplementationPlan.md) §4。

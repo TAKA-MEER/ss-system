@@ -101,3 +101,18 @@
 | `use_fakes` | — | false | 偽の昇降機・カメラ・検出器を使う（試験・hve とつなぐ前の動作確認だけ。[-packets.md](DetailedDesign-packets.md) `WP-LOC-01`） |
 | `fake_fixture` | — | `ss_ws/src/ss_locator/tests/fixtures/proto_9265d2d.json` | 偽のカメラ・検出器の材料（`WP-EST-01`） |
 | `fake_scene` | — | 0 | 材料のどのシーンを使うか |
+
+## 6. 金具認識のリアルタイム表示（[-demo.md](DetailedDesign-demo.md)。案）
+
+本番外の道具。本番のノードからは読み込まない。
+
+| 名前 | 種類 | 中身 |
+| --- | --- | --- |
+| `ss_locator/demo_view.py` | ファイル（純関数） | `fit_to_canvas`・`draw_lugs`・`LatestFrame` |
+| `ss_locator/lug_demo.py` | ファイル（つなぐ） | `load_defaults`・`run_demo`・`main` |
+| `lug_demo` | 実行ファイル（`setup.py` の `console_scripts`） | `ss_locator.lug_demo:main` |
+| `Detector.detect_with_boxes` | メソッド（`detector.py`） | キーポイント (N,4,2)・確信度 (N,)・枠 (N,4) の xyxy を返す。`detect` はこの最初の 2 つを返す |
+| `--source`・`--conf`・`--model`・`--headless`・`--max-frames` | `lug_demo` の引数 | [-demo.md](DetailedDesign-demo.md) §3 |
+| `tests/test_demo_view.py`・`tests/test_lug_demo.py` | 試験 | `WP-DEMO-01` |
+
+パラメータは新しく作らない。既定値は §5 の `model_file`・`model_sha256`・`detect_imgsz`・`detect_conf` を `locator.yaml` から読む。

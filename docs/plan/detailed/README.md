@@ -39,6 +39,7 @@
 | [DetailedDesign-locate.md](DetailedDesign-locate.md) | 盤の位置を探す口（依頼する側との ROS 2 の口） | 2026-11-05 fk-system が確かめた |
 | [DetailedDesign-core.md](DetailedDesign-core.md) | 中の構成と推定（層・外部パラメータ・走査・返す盤への変換・依頼の流れ） | 2026-11-05 案 |
 | [DetailedDesign-packets.md](DetailedDesign-packets.md) | 作業パケットと受け入れ条件 | 2026-11-05 案 |
+| [DetailedDesign-demo.md](DetailedDesign-demo.md) | 金具認識のリアルタイム表示（本番外の道具。[Spec-demo.md](../spec/Spec-demo.md)） | 2026-11-08 案 |
 
 hve-system とつなぐ部分は、hve の口が決まってから足す。
 
