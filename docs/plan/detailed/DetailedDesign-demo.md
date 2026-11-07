@@ -33,7 +33,8 @@ ROS 2・ultralytics を読み込まない。numpy と cv2（描画と縮小・�
 | --- | --- |
 | `fit_to_canvas(image, width=1280, height=720)` | 倍率 `s = min(width / w, height / h)`（**1 より大きくてもよい。小さい映像も拡大する**）で縦横比を保って縮小・拡大し、`width`×`height` の黒い画像の中央に置く。返すのは `(canvas, s, (pad_x, pad_y))` |
 | `draw_lugs(canvas, boxes, keypoints, confidences, info)` | `canvas` の写しに描く。金具ごとに枠（`boxes` (N,4) の xyxy）・キーポイント 4 点（根元・リング中心・両端の順に色を変えた円。両端は線で結ぶ）・確信度（枠の上に小数 2 桁）。左上に `info` の行（下の表）。文字は ASCII だけ（`cv2.putText` は日本語を描けない） |
-| `LatestFrame` | スレッドをまたいでコマを 1 つだけ持つ箱。`put(frame)` は前のコマを上書きし、上書きで捨てた数を `dropped` に足す。`take(timeout_s)` は持っているコマを返して空にする。空なら `timeout_s` まで待ち、来なければ `None`。`close()` のあとの `take` は `None` |
+| `RateMeter(window_s=1.0)` | 速さを数える。`tick(now, count=1)` で出来事を記録し、`rate(now)` は `now` から `window_s` さかのぼった中の数 ÷ `window_s` を返す。**最初の `tick` から `window_s` たっていなければ `None`**。時刻は引数で受ける（試験で時計を差し替える） |
+| `LatestFrame` | スレッドをまたいでコマを 1 つだけ持つ箱。**`put` の回数を `received` に数える**。`put(frame)` は前のコマを上書きし、上書きで捨てた数を `dropped` に足す。`take(timeout_s)` は持っているコマを返して空にする。空なら `timeout_s` まで待ち、来なければ `None`。`close()` のあとの `take` は `None` |
 
 左上の行（`info`）:
 
@@ -43,13 +44,16 @@ ROS 2・ultralytics を読み込まない。numpy と cv2（描画と縮小・�
 | 1 コマの推定にかかった時間（`Detector` の呼び出しの前後） | `infer: 183 ms` |
 | しきい値 | `conf >= 0.25` |
 | 捨てたコマの数（起動からの合計。フォルダでは 0） | `dropped: 12` |
+| 画面の更新の速さ: 直近 1 秒に `show` した回数（`RateMeter`）。1 秒たつまでは `-` | `fps: 3.9` |
+| 入力のコマの速さ: 直近 1 秒に入力から届いたコマの数（`RateMeter`。入力の `received` の増分で数える）。**フォルダは届く速さが無いので `-`** | `in fps: 30.0` |
+| 入力の元の解像度（`fit_to_canvas` の前の幅×高さ） | `src: 640x480` |
 
 ## 3. つなぐ層（`lug_demo.py`）
 
 | 名前 | 中身 |
 | --- | --- |
 | `load_defaults(yaml_path)` | `locator.yaml` の `locator_node.ros__parameters` から `model_file`・`model_sha256`・`detect_imgsz`・`detect_conf` を読んで返す。`yaml_path` の既定は `ament_index_python` で引いた `share/ss_locator/config/locator.yaml` |
-| `run_demo(source, detector, show, conf, max_frames=None)` | 推定の繰り返し。`source` からコマを取り → `fit_to_canvas` → `detector.detect_with_boxes` → `draw_lugs` → `show(画像, 結果)`。**描くのは、推定したそのコマの上**（推定のあいだに来た新しいコマの上に古い結果を描かない）。`show` が `False` を返したら終わる。`max_frames` 枚推定したら終わる。`detector` と `show` は差し替えられる（試験で偽物を入れる） |
+| `run_demo(source, detector, show, conf, max_frames=None, clock=time.monotonic)` | 推定の繰り返し。§2 の左上の行を作る（`clock` で時刻を取り、入力に `received` が無ければ入力の速さは `-`）。`source` からコマを取り → `fit_to_canvas` → `detector.detect_with_boxes` → `draw_lugs` → `show(画像, 結果)`。**描くのは、推定したそのコマの上**（推定のあいだに来た新しいコマの上に古い結果を描かない）。`show` が `False` を返したら終わる。`max_frames` 枚推定したら終わる。`detector` と `show` は差し替えられる（試験で偽物を入れる） |
 | `main(argv)` | 引数（下の表）を読み、`Detector` を作って `run_demo` を回す。画面ありなら `show` は `cv2.imshow` と `cv2.waitKey(1)`（`q` か Esc で `False`）。`--headless` なら `show` は 1 行を標準出力に出すだけ |
 
 | 引数 | 既定 | 中身 |
@@ -60,7 +64,7 @@ ROS 2・ultralytics を読み込まない。numpy と cv2（描画と縮小・�
 | `--headless` | なし | 画面を出さない |
 | `--max-frames` | なし（終わりまで） | 推定する枚数の上限 |
 
-`--headless` で 1 コマごとに出す行: `frame=<推定した通し番号> lugs=<数> infer_ms=<整数> dropped=<合計>`。
+`--headless` で 1 コマごとに出す行: `frame=<推定した通し番号> lugs=<数> infer_ms=<整数> dropped=<合計>`（速さと解像度は出さない。`show` に渡す結果には `fps`・`in_fps`（無ければ `None`）・`src_size`（幅, 高さ）を入れる）。
 
 **保存しない**（[Spec-demo.md](../spec/Spec-demo.md) §2）: `cv2.imwrite`・`cv2.VideoWriter` を使わない。ファイルに書くものは何も無い。
 

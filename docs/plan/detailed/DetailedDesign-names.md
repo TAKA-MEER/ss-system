@@ -108,7 +108,7 @@
 
 | 名前 | 種類 | 中身 |
 | --- | --- | --- |
-| `ss_locator/demo_view.py` | ファイル（純関数） | `fit_to_canvas`・`draw_lugs`・`LatestFrame` |
+| `ss_locator/demo_view.py` | ファイル（純関数） | `fit_to_canvas`・`draw_lugs`・`LatestFrame`（`received`）・`RateMeter`（`tick`・`rate`） |
 | `ss_locator/lug_demo.py` | ファイル（つなぐ） | `load_defaults`・`run_demo`・`main` |
 | `lug_demo` | 実行ファイル（`setup.py` の `console_scripts`） | `ss_locator.lug_demo:main` |
 | `Detector.detect_with_boxes` | メソッド（`detector.py`） | キーポイント (N,4,2)・確信度 (N,)・枠 (N,4) の xyxy を返す。`detect` はこの最初の 2 つを返す |
@@ -117,5 +117,7 @@
 | `scripts/demo.sh` | 起動スクリプト（ホストで動かす） | [-demo.md](DetailedDesign-demo.md) §4.1。引数 `--dry-run` だけはスクリプトのもの |
 | `/input` | コンテナの中のパス | `scripts/demo.sh` が動画・フォルダを読み取り専用で mount する場所 |
 | `tests/test_demo_script.py` | 試験 | `WP-DEMO-02` |
+| `received` | 入力（`LatestFrame` と、それを持つ USB・動画の入力）の属性 | 入力から届いたコマの数（起動からの合計）。フォルダの入力は持たない |
+| `fps`・`in_fps`・`src_size` | `show` に渡す結果の鍵 | [-demo.md](DetailedDesign-demo.md) §3 |
 
 パラメータは新しく作らない。既定値は §5 の `model_file`・`model_sha256`・`detect_imgsz`・`detect_conf` を `locator.yaml` から読む。

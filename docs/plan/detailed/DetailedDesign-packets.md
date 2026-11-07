@@ -18,6 +18,7 @@
 | `WP-CAL-01` | カメラの内部パラメータの校正 | `WP-ENV-01` | **待ち**（hve のカメラで撮ったチェッカーボードの画像） |
 | `WP-DEMO-01` | 金具認識のリアルタイム表示（本番外の道具） | `WP-DET-01` | できる |
 | `WP-DEMO-02` | 金具認識のリアルタイム表示の起動スクリプト | `WP-DEMO-01` | できる |
+| `WP-DEMO-03` | 金具認識のリアルタイム表示に速さと入力の解像度を出す | `WP-DEMO-01` | できる |
 
 先行試作は `../../lifting-lug-pose` の `9265d2d`。**試作のリポジトリは読むだけで、書き換えない。**
 
@@ -274,3 +275,23 @@ scripts/demo.sh --source <金具の写っていない画像フォルダ> --headl
 | `test_headless_has_no_display` | `--headless` で `DISPLAY`・`/tmp/.X11-unix` が付かず、`--headless` は `lug_demo` に渡る。付けないと両方付く |
 | `test_args_passed_through` | `--conf 0.4 --max-frames 3` がそのまま `lug_demo` に渡り、`--dry-run` は渡らない |
 | `test_repo_root_from_anywhere` | 別のフォルダを作業場所にして呼んでも、`/ws` に mount されるのはリポジトリ直下 |
+
+## `WP-DEMO-03` 金具認識のリアルタイム表示に速さと入力の解像度を出す
+
+**読む節**: [-demo.md](DetailedDesign-demo.md) §2・§3、[-names.md](DetailedDesign-names.md) §6。
+
+| やること | 中身 |
+| --- | --- |
+| 純関数 | `demo_view.py` に `RateMeter` を足し、`LatestFrame` に `received` を足す |
+| つなぐ | `lug_demo.py` の `run_demo` に `clock` を足し、左上の行と `show` に渡す結果に速さと解像度を足す。USB・動画の入力に `received` を持たせる |
+| 試験 | `tests/test_demo_view.py`・`tests/test_lug_demo.py` に足す（下の表）。**時計は差し替え、実時間で待たない** |
+
+**受け入れ条件**: `docker run --rm -v "$PWD":/ws ss-system:dev bash scripts/test.sh` が 0 で終わる（今までの試験も通る）。実装管理担当がホストで `scripts/demo.sh --source <画像フォルダ> --headless --max-frames 2` を回し、行の形が変わっていないこと。
+
+| 試験 | 確かめること |
+| --- | --- |
+| `test_rate_meter` | 0.1 秒おきに `tick` すると、1 秒たつまで `None`、そのあと 10.0（±0.5）。`tick` を止めると 1 秒後に 0 |
+| `test_latest_frame_counts_received` | `put` を 3 回 → `received` は 3（`take` しても減らない） |
+| `test_run_demo_reports_rates` | 偽の時計（推定のたびに 0.25 秒進む）と、推定のたびに入力へ 3 コマ足す偽の検出器で、十分回したあとの結果の `fps` が 4.0（±0.5）、`in_fps` が 12.0（±1） |
+| `test_run_demo_reports_src_size` | 640×480 のコマで `src_size` が (640, 480)、左上の行に `src: 640x480` がある（`draw_lugs` に渡った `info` で確かめる） |
+| `test_folder_has_no_input_rate` | フォルダの入力で `in_fps` が `None`、左上の行が `in fps: -` |
