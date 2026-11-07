@@ -73,7 +73,9 @@ def test_run_demo_skips_stale_frames() -> None:
 
 
 def test_run_demo_draws_on_inferred_frame() -> None:
-    frame = _marked(50)
+    inferred_value = 50
+    newer_value = 200
+    frame = _marked(inferred_value)
     source = LatestFrame()
     source.put(frame)
     received = []
@@ -82,6 +84,7 @@ def test_run_demo_draws_on_inferred_frame() -> None:
     class Detector:
         def detect_with_boxes(self, image):
             received.append(np.array(image, copy=True))
+            source.put(_marked(newer_value))
             boxes = np.array([[10.0, 100.0, 60.0, 150.0]], np.float32)
             keypoints = np.array(
                 [[[15.0, 105.0], [35.0, 125.0], [55.0, 105.0], [55.0, 145.0]]],
@@ -97,7 +100,9 @@ def test_run_demo_draws_on_inferred_frame() -> None:
 
     assert len(received) == 1
     assert np.array_equal(received[0], frame)
-    assert np.array_equal(shown[0][300:400, 300:400], received[0][300:400, 300:400])
+    background = shown[0][300:400, 300:400]
+    assert np.all(background == inferred_value)
+    assert not np.any(background == newer_value)
 
 
 def test_folder_source_in_order_no_drop(tmp_path, monkeypatch, capsys) -> None:
@@ -117,6 +122,26 @@ def test_folder_source_in_order_no_drop(tmp_path, monkeypatch, capsys) -> None:
     lines = capsys.readouterr().out.strip().splitlines()
     assert len(lines) == 3
     assert all("dropped=0" in line for line in lines)
+
+
+def test_main_honours_max_frames(tmp_path, monkeypatch, capsys) -> None:
+    folder = tmp_path / "in"
+    folder.mkdir()
+    for index, name in enumerate(["a.png", "b.png", "c.png", "d.png", "e.png"]):
+        _write_image(folder / name, 10 * (index + 1))
+
+    fake = _make_fake_detector()
+    monkeypatch.setattr(lug_demo, "Detector", fake)
+
+    assert (
+        lug_demo.main(
+            ["--source", str(folder), "--headless", "--max-frames", "2"]
+        )
+        == 0
+    )
+
+    assert fake.instances[-1].seen == [10, 20]
+    assert len(capsys.readouterr().out.strip().splitlines()) == 2
 
 
 def test_conf_reaches_detector(tmp_path, monkeypatch) -> None:
