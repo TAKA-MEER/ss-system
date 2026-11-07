@@ -125,10 +125,6 @@ class LatestFrame:
             self._frame = None
             return frame
 
-    def has_frame(self) -> bool:
-        with self._condition:
-            return self._frame is not None
-
     def close(self) -> None:
         with self._condition:
             self._closed = True
