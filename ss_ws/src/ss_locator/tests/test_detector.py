@@ -79,3 +79,76 @@ def test_detector_rejects_bad_hash(monkeypatch: pytest.MonkeyPatch) -> None:
         Detector(MODEL_FILE, "0" * 64, IMGSZ, CONF)
 
     assert loaded == []
+
+
+class _Numpy:
+    def __init__(self, array):
+        self._array = array
+
+    def cpu(self):
+        return self
+
+    def numpy(self):
+        return self._array
+
+
+class _Keypoints:
+    def __init__(self, data):
+        self.data = _Numpy(data)
+
+
+class _Boxes:
+    def __init__(self, xyxy, conf):
+        self.xyxy = _Numpy(xyxy)
+        self.conf = _Numpy(conf)
+
+    def __len__(self):
+        return len(self.xyxy.numpy())
+
+
+class _Result:
+    def __init__(self, keypoints=None, boxes=None):
+        self.keypoints = keypoints
+        self.boxes = boxes
+
+
+class _Model:
+    def __init__(self, result):
+        self._result = result
+
+    def predict(self, *args, **kwargs):
+        return [self._result]
+
+
+def _detector_with(result):
+    det = object.__new__(Detector)
+    det.model_file = None
+    det.imgsz = IMGSZ
+    det.conf = CONF
+    det._model = _Model(result)
+    return det
+
+
+def test_detect_with_boxes_matches_detect() -> None:
+    """`detect` は `detect_with_boxes` の最初の 2 つ。検出 0 個なら枠は (0,4)。"""
+    keypoints = np.arange(1 * 4 * 3, dtype=np.float32).reshape(1, 4, 3)
+    confidences = np.array([0.9], dtype=np.float32)
+    boxes = np.array([[10.0, 20.0, 30.0, 40.0]], dtype=np.float32)
+    det = _detector_with(_Result(_Keypoints(keypoints), _Boxes(boxes, confidences)))
+
+    kp, conf, box = det.detect_with_boxes(np.zeros((32, 32, 3), np.uint8))
+    assert np.array_equal(box, boxes)
+    assert np.array_equal(kp, keypoints[:, :, :2])
+    assert np.array_equal(conf, confidences)
+    dkp, dconf = det.detect(np.zeros((32, 32, 3), np.uint8))
+    assert np.array_equal(dkp, kp)
+    assert np.array_equal(dconf, conf)
+
+    empty = _detector_with(_Result(None, None))
+    kp, conf, box = empty.detect_with_boxes(np.zeros((32, 32, 3), np.uint8))
+    assert kp.shape == (0, 4, 2)
+    assert conf.shape == (0,)
+    assert box.shape == (0, 4)
+    dkp, dconf = empty.detect(np.zeros((32, 32, 3), np.uint8))
+    assert np.array_equal(dkp, kp)
+    assert np.array_equal(dconf, conf)
