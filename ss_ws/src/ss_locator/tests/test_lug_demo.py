@@ -55,6 +55,17 @@ class _AddingDetector:
         return _empty_detections()
 
 
+class _Clock:
+    def __init__(self):
+        self.now = 0.0
+
+    def __call__(self):
+        return self.now
+
+    def advance(self, seconds):
+        self.now += seconds
+
+
 def test_run_demo_skips_stale_frames() -> None:
     source = LatestFrame()
     source.put(_marked(0))
@@ -103,6 +114,89 @@ def test_run_demo_draws_on_inferred_frame() -> None:
     background = shown[0][300:400, 300:400]
     assert np.all(background == inferred_value)
     assert not np.any(background == newer_value)
+
+
+def test_run_demo_reports_rates() -> None:
+    clock = _Clock()
+    source = LatestFrame()
+    source.put(_marked(0))
+
+    class Detector:
+        def detect_with_boxes(self, image):
+            clock.advance(0.25)
+            marker = int(image[0, 0, 0])
+            for step in (1, 2, 3):
+                source.put(_marked(marker + step))
+            return _empty_detections()
+
+    results = []
+
+    def show(image, result):
+        results.append(result)
+        return True
+
+    lug_demo.run_demo(source, Detector(), show, 0.25, max_frames=10, clock=clock)
+
+    assert results[-1]["fps"] == pytest.approx(4.0, abs=0.5)
+    assert results[-1]["in_fps"] == pytest.approx(12.0, abs=1.0)
+
+
+def test_run_demo_reports_src_size(monkeypatch) -> None:
+    source = LatestFrame()
+    source.put(np.full((480, 640, 3), 7, dtype=np.uint8))
+    infos = []
+    real_draw_lugs = lug_demo.draw_lugs
+
+    def capture(canvas, boxes, keypoints, confidences, info):
+        infos.append(list(info))
+        return real_draw_lugs(canvas, boxes, keypoints, confidences, info)
+
+    monkeypatch.setattr(lug_demo, "draw_lugs", capture)
+
+    class Detector:
+        def detect_with_boxes(self, image):
+            return _empty_detections()
+
+    results = []
+
+    def show(image, result):
+        results.append(result)
+        return True
+
+    lug_demo.run_demo(source, Detector(), show, 0.25, max_frames=1)
+
+    assert results[0]["src_size"] == (640, 480)
+    assert "src: 640x480" in infos[0]
+
+
+def test_folder_has_no_input_rate(tmp_path, monkeypatch) -> None:
+    folder = tmp_path / "in"
+    folder.mkdir()
+    _write_image(folder / "a.png", 10)
+    source = lug_demo._open_source(str(folder))
+    infos = []
+    real_draw_lugs = lug_demo.draw_lugs
+
+    def capture(canvas, boxes, keypoints, confidences, info):
+        infos.append(list(info))
+        return real_draw_lugs(canvas, boxes, keypoints, confidences, info)
+
+    monkeypatch.setattr(lug_demo, "draw_lugs", capture)
+
+    class Detector:
+        def detect_with_boxes(self, image):
+            return _empty_detections()
+
+    results = []
+
+    def show(image, result):
+        results.append(result)
+        return True
+
+    lug_demo.run_demo(source, Detector(), show, 0.25, max_frames=1)
+
+    assert results[0]["in_fps"] is None
+    assert "in fps: -" in infos[0]
 
 
 def test_folder_source_in_order_no_drop(tmp_path, monkeypatch, capsys) -> None:

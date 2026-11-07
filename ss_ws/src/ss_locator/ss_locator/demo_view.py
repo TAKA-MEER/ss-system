@@ -91,6 +91,34 @@ def draw_lugs(
     return out
 
 
+class RateMeter:
+    """直近 `window_s` 秒の出来事の数を数え、1 秒あたりの速さを返す。"""
+
+    def __init__(self, window_s: float = 1.0) -> None:
+        self._window_s = float(window_s)
+        self._first = None
+        self._events: list[tuple[float, int]] = []
+
+    def tick(self, now: float, count: int = 1) -> None:
+        now = float(now)
+        if self._first is None:
+            self._first = now
+        self._events = [
+            (at, number)
+            for at, number in self._events
+            if at > now - self._window_s
+        ]
+        self._events.append((now, int(count)))
+
+    def rate(self, now: float) -> float | None:
+        now = float(now)
+        if self._first is None or now - self._first < self._window_s:
+            return None
+        cutoff = now - self._window_s
+        total = sum(number for at, number in self._events if cutoff < at <= now)
+        return total / self._window_s
+
+
 class LatestFrame:
     """スレッドをまたいで最新の 1 コマだけを持つ箱。"""
 
@@ -99,11 +127,13 @@ class LatestFrame:
         self._frame = None
         self._closed = False
         self.dropped = 0
+        self.received = 0
 
     def put(self, frame) -> None:
         with self._condition:
             if self._closed:
                 return
+            self.received += 1
             if self._frame is not None:
                 self.dropped += 1
             self._frame = frame

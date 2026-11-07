@@ -5,7 +5,7 @@ from __future__ import annotations
 import numpy as np
 import pytest
 
-from ss_locator.demo_view import LatestFrame, draw_lugs, fit_to_canvas
+from ss_locator.demo_view import LatestFrame, RateMeter, draw_lugs, fit_to_canvas
 
 
 def _blank(w, h):
@@ -85,3 +85,30 @@ def test_latest_frame_keeps_newest() -> None:
     frame.put(4)
     frame.close()
     assert frame.take(0.01) is None
+
+
+def test_latest_frame_counts_received() -> None:
+    frame = LatestFrame()
+    assert frame.received == 0
+
+    for value in (1, 2, 3):
+        frame.put(value)
+
+    assert frame.received == 3
+    assert frame.take(0.01) == 3
+    assert frame.received == 3
+
+
+def test_rate_meter() -> None:
+    meter = RateMeter(window_s=1.0)
+
+    time_s = 0.0
+    while time_s < 1.0 - 1e-9:
+        meter.tick(time_s)
+        assert meter.rate(time_s) is None
+        time_s = round(time_s + 0.1, 10)
+
+    meter.tick(1.0)
+    assert meter.rate(1.0) == pytest.approx(10.0, abs=0.5)
+
+    assert meter.rate(2.0) == pytest.approx(0.0, abs=1e-9)

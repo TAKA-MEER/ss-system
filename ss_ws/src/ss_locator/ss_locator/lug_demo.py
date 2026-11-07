@@ -14,11 +14,15 @@ from pathlib import Path
 import cv2
 import yaml
 
-from .demo_view import LatestFrame, draw_lugs, fit_to_canvas
+from .demo_view import LatestFrame, RateMeter, draw_lugs, fit_to_canvas
 from .detector import Detector
 
 TAKE_TIMEOUT_S = 0.1
 IMAGE_SUFFIXES = {".jpg", ".jpeg", ".png"}
+
+
+def _format_rate(rate: float | None) -> str:
+    return "-" if rate is None else f"{rate:.1f}"
 
 
 def load_defaults(yaml_path: str | Path | None = None) -> dict:
@@ -35,11 +39,21 @@ def load_defaults(yaml_path: str | Path | None = None) -> dict:
     }
 
 
-def run_demo(source, detector, show, conf, max_frames=None) -> None:
+def run_demo(
+    source,
+    detector,
+    show,
+    conf,
+    max_frames=None,
+    clock=time.monotonic,
+) -> None:
     """`source` から最新のコマを取り、推定してそのコマの上に描く。"""
     inferred = 0
     frame_no = -1
     last_dropped = 0
+    last_received = 0
+    out_meter = RateMeter()
+    in_meter = RateMeter()
 
     while max_frames is None or inferred < max_frames:
         frame = source.take(TAKE_TIMEOUT_S)
@@ -50,10 +64,23 @@ def run_demo(source, detector, show, conf, max_frames=None) -> None:
         frame_no += (dropped - last_dropped) + 1
         last_dropped = dropped
 
+        src_h, src_w = frame.shape[:2]
         canvas, _, _ = fit_to_canvas(frame)
-        started = time.perf_counter()
+        started = clock()
         keypoints, confidences, boxes = detector.detect_with_boxes(canvas)
-        infer_ms = int(round((time.perf_counter() - started) * 1000))
+        infer_ms = int(round((clock() - started) * 1000))
+
+        now = clock()
+        out_meter.tick(now)
+        fps = out_meter.rate(now)
+
+        received = getattr(source, "received", None)
+        if received is None:
+            in_fps = None
+        else:
+            in_meter.tick(now, int(received) - last_received)
+            last_received = int(received)
+            in_fps = in_meter.rate(now)
 
         lugs = int(len(confidences))
         info = [
@@ -61,6 +88,9 @@ def run_demo(source, detector, show, conf, max_frames=None) -> None:
             f"infer: {infer_ms} ms",
             f"conf >= {float(conf):g}",
             f"dropped: {dropped}",
+            f"fps: {_format_rate(fps)}",
+            f"in fps: {_format_rate(in_fps)}",
+            f"src: {src_w}x{src_h}",
         ]
         image = draw_lugs(canvas, boxes, keypoints, confidences, info)
         result = {
@@ -68,6 +98,9 @@ def run_demo(source, detector, show, conf, max_frames=None) -> None:
             "lugs": lugs,
             "infer_ms": infer_ms,
             "dropped": dropped,
+            "fps": fps,
+            "in_fps": in_fps,
+            "src_size": (src_w, src_h),
             "boxes": boxes,
             "keypoints": keypoints,
             "confidences": confidences,
@@ -122,6 +155,10 @@ class _LatestSource:
     @property
     def dropped(self) -> int:
         return self._frames.dropped
+
+    @property
+    def received(self) -> int:
+        return self._frames.received
 
     def _read(self) -> None:
         interval = 1.0 / self._fps if self._fps and self._fps > 0 else 0.0
