@@ -10,6 +10,22 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
       python3-pip \
       python3-rosdep \
       libgl1 \
+      libglib2.0-0 \
+      libsm6 \
+      libxext6 \
+      libxrender1 \
+      libxcb-xinerama0 \
+      libxcb-icccm4 \
+      libxcb-image0 \
+      libxcb-keysyms1 \
+      libxcb-randr0 \
+      libxcb-render-util0 \
+      libxcb-shape0 \
+      libxcb-cursor0 \
+      libxcb-xkb1 \
+      libxkbcommon-x11-0 \
+      xauth \
+      xvfb \
     && rm -rf /var/lib/apt/lists/*
 
 RUN python3 -m pip install \
