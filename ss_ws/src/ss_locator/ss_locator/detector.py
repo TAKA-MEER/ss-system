@@ -50,8 +50,10 @@ class Detector:
         self.conf = float(conf)
         self._model = _load_yolo(str(self.model_file))
 
-    def detect(self, image_bgr: np.ndarray) -> tuple[np.ndarray, np.ndarray]:
-        """BGR 画像 1 枚を検出し、キーポイント (N,4,2) と確信度 (N,) を返す。"""
+    def detect_with_boxes(
+        self, image_bgr: np.ndarray
+    ) -> tuple[np.ndarray, np.ndarray, np.ndarray]:
+        """BGR 画像 1 枚を検出し、キーポイント (N,4,2)・確信度 (N,)・枠 (N,4) xyxy を返す。"""
         result = self._model.predict(
             image_bgr,
             imgsz=self.imgsz,
@@ -60,7 +62,21 @@ class Detector:
             verbose=False,
         )[0]
         if result.keypoints is None or result.boxes is None or len(result.boxes) == 0:
-            return np.zeros((0, 4, 2), dtype=np.float32), np.zeros((0,), dtype=np.float32)
+            return (
+                np.zeros((0, 4, 2), dtype=np.float32),
+                np.zeros((0,), dtype=np.float32),
+                np.zeros((0, 4), dtype=np.float32),
+            )
         keypoints = result.keypoints.data.cpu().numpy()
         confidences = result.boxes.conf.cpu().numpy()
-        return keypoints[:, :, :2].astype(np.float32), confidences.astype(np.float32)
+        boxes = result.boxes.xyxy.cpu().numpy()
+        return (
+            keypoints[:, :, :2].astype(np.float32),
+            confidences.astype(np.float32),
+            boxes.astype(np.float32),
+        )
+
+    def detect(self, image_bgr: np.ndarray) -> tuple[np.ndarray, np.ndarray]:
+        """BGR 画像 1 枚を検出し、キーポイント (N,4,2) と確信度 (N,) を返す。"""
+        keypoints, confidences, _ = self.detect_with_boxes(image_bgr)
+        return keypoints, confidences
