@@ -114,5 +114,8 @@
 | `Detector.detect_with_boxes` | メソッド（`detector.py`） | キーポイント (N,4,2)・確信度 (N,)・枠 (N,4) の xyxy を返す。`detect` はこの最初の 2 つを返す |
 | `--source`・`--conf`・`--model`・`--headless`・`--max-frames` | `lug_demo` の引数 | [-demo.md](DetailedDesign-demo.md) §3 |
 | `tests/test_demo_view.py`・`tests/test_lug_demo.py` | 試験 | `WP-DEMO-01` |
+| `scripts/demo.sh` | 起動スクリプト（ホストで動かす） | [-demo.md](DetailedDesign-demo.md) §4.1。引数 `--dry-run` だけはスクリプトのもの |
+| `/input` | コンテナの中のパス | `scripts/demo.sh` が動画・フォルダを読み取り専用で mount する場所 |
+| `tests/test_demo_script.py` | 試験 | `WP-DEMO-02` |
 
 パラメータは新しく作らない。既定値は §5 の `model_file`・`model_sha256`・`detect_imgsz`・`detect_conf` を `locator.yaml` から読む。

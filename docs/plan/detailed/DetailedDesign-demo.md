@@ -66,6 +66,7 @@ ROS 2・ultralytics を読み込まない。numpy と cv2（描画と縮小・�
 
 ## 4. 動かし方
 
+**ふつうは起動スクリプト `scripts/demo.sh` を使う**（§4.1。2026-11-08 ユーザー依頼）。下は中でやっていること。
 ホスト（ノートパソコンの Ubuntu 22.04）で X の接続をコンテナに許してから動かす。
 
 ```bash
@@ -83,3 +84,21 @@ docker run --rm -it -e DISPLAY -v /tmp/.X11-unix:/tmp/.X11-unix \
 
 推定の速さはパソコンで変わるので、**試験は偽の検出器（決まった時間だけ待って決まった結果を返す）と、メモリの中で作ったコマで回す**。学習済みモデルが要る試験は、モデルが無いとき skip する（`test_detector.py` と同じ）。
 **呼び出し側を縛る**: 「最新のコマだけを推定する」「推定したコマの上に描く」「しきい値が `Detector` まで届く」「何も書かない」は、`run_demo`・`main` を通して確かめる（純関数の試験だけにしない）。
+
+### 4.1 起動スクリプト（`scripts/demo.sh`）
+
+ホストで、リポジトリのどこからでも `scripts/demo.sh [lug_demo の引数…]` で起動する。bash で書く。
+
+| 振る舞い | 中身 |
+| --- | --- |
+| 作業場所 | スクリプトの置き場所からリポジトリ直下を求め、そこを `/ws` に bind mount する（呼んだ場所に依らない） |
+| 引数 | `--dry-run` だけはスクリプトのもの（取り除く）。**ほかはそのまま `lug_demo` に渡す**。`--source` が無ければ `--source usb:0` を足す |
+| 事前の確かめ | `model/lug_v3_s.pt` が無ければ、置き場所を書いて 1 で終わる（SHA-256 の照合は `lug_demo` に任せる）。イメージ `ss-system:dev` が無ければ `docker/Dockerfile` から作る |
+| USB カメラ | `--source usb:<N>` なら `--device /dev/video<N>` を付ける。`/dev/video<N>` が無ければ、そう書いて 1 で終わる |
+| 動画・フォルダ | `--source` がホストに在るパスなら、**絶対パスにして、その場所を読み取り専用で `/input` に bind mount し、`--source` を `/input` 側に書き換える**（ファイルなら親のフォルダを mount してファイル名を付ける）。在らなければ、そう書いて 1 で終わる |
+| 画面 | `--headless` が無いときだけ: `DISPLAY` が空なら、そう書いて 1 で終わる。`xhost +local:docker` を打ち（`xhost` が無ければ飛ばす）、`-e DISPLAY` と `/tmp/.X11-unix` の mount を付ける |
+| 端末 | 標準入力が端末なら `-it`、そうでなければ `-i` も `-t` も付けない |
+| コンテナの中 | `colcon build`（出力は捨て、失敗したら止まる）→ `install/setup.bash` → `/ws` で `ros2 run ss_locator lug_demo <引数>` |
+| `--dry-run` | 上の確かめのうちモデル・イメージ・`DISPLAY`・`xhost` を飛ばし、**打つはずの `docker run` の引数を 1 行に 1 つずつ標準出力に出して 0 で終わる**（試験用。`docker` も `xhost` も呼ばない） |
+
+終了コードは `lug_demo` のものをそのまま返す。

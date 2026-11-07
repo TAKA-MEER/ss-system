@@ -17,6 +17,7 @@
 | `WP-HVE-01` | hve-system とつなぐ | `WP-LOC-02` | **待ち**（[-core.md](DetailedDesign-core.md) §6） |
 | `WP-CAL-01` | カメラの内部パラメータの校正 | `WP-ENV-01` | **待ち**（hve のカメラで撮ったチェッカーボードの画像） |
 | `WP-DEMO-01` | 金具認識のリアルタイム表示（本番外の道具） | `WP-DET-01` | できる |
+| `WP-DEMO-02` | 金具認識のリアルタイム表示の起動スクリプト | `WP-DEMO-01` | できる |
 
 先行試作は `../../lifting-lug-pose` の `9265d2d`。**試作のリポジトリは読むだけで、書き換えない。**
 
@@ -244,3 +245,32 @@ docker run --rm ss-system:dev bash -c "python3 -m pip list 2>/dev/null | grep -c
 | `test_conf_reaches_detector` | `main` に `--conf 0.6` を渡すと `Detector` の `conf` が 0.6。渡さないと `locator.yaml` の `detect_conf` と同じ |
 | `test_main_writes_no_files` | 一時ディレクトリを作業場所にしてフォルダを `--headless` で回すと、一時ディレクトリにも入力のフォルダにも新しいファイルができない |
 | `test_detect_with_boxes_matches_detect` | 偽の YOLO の結果で、`detect` の結果が `detect_with_boxes` の最初の 2 つと同じ。検出 0 個で枠は (0,4) |
+
+## `WP-DEMO-02` 金具認識のリアルタイム表示の起動スクリプト
+
+**読む節**: [-demo.md](DetailedDesign-demo.md) §4・§4.1、[-names.md](DetailedDesign-names.md) §6。
+
+| やること | 中身 |
+| --- | --- |
+| スクリプト | `scripts/demo.sh`（実行権限を付ける） |
+| 試験 | `ss_ws/src/ss_locator/tests/test_demo_script.py`。`--dry-run` で `subprocess` から呼び、出た引数を確かめる（下の表）。**`docker` も `xhost` も呼ばない**ので、コンテナの中の `scripts/test.sh` で回る。`/dev/video<N>` の有無はスクリプトの外から差し替えられるようにする（環境変数 `SS_DEMO_DEV_DIR`。既定 `/dev`）。この名前は試験のためだけのもの |
+
+**受け入れ条件**:
+
+```bash
+docker run --rm -v "$PWD":/ws ss-system:dev bash scripts/test.sh   # 0 で終わる
+bash -n scripts/demo.sh && scripts/demo.sh --dry-run --source usb:0 --headless   # 引数が出て 0 で終わる
+# 実装管理担当がホストで（モデルを置いて）: 
+scripts/demo.sh --source <金具の写っていない画像フォルダ> --headless --max-frames 2   # 2 行出て 0 で終わる
+```
+
+| 試験 | 確かめること |
+| --- | --- |
+| `test_default_source_usb0` | `--source` が無いと `--source usb:0` と `--device /dev/video0` が付く |
+| `test_usb_device_index` | `--source usb:2` で `--device /dev/video2`。`/dev/video2` が無いと 1 で終わり、標準出力に `docker run` の引数が出ない |
+| `test_folder_mounted_readonly` | 一時フォルダを相対パスで渡すと、その絶対パスが `/input` に `:ro` で mount され、`--source /input` になる。`--device` は付かない |
+| `test_video_file_mounts_parent` | ファイルを渡すと親が `/input` に mount され、`--source /input/<ファイル名>` になる |
+| `test_missing_path_fails` | 在らないパスで 1 で終わる |
+| `test_headless_has_no_display` | `--headless` で `DISPLAY`・`/tmp/.X11-unix` が付かず、`--headless` は `lug_demo` に渡る。付けないと両方付く |
+| `test_args_passed_through` | `--conf 0.4 --max-frames 3` がそのまま `lug_demo` に渡り、`--dry-run` は渡らない |
+| `test_repo_root_from_anywhere` | 別のフォルダを作業場所にして呼んでも、`/ws` に mount されるのはリポジトリ直下 |
