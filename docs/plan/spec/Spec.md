@@ -99,6 +99,7 @@ fk-system の測定の流れ（fk-system [Spec.md](../../../../fk-system/docs/pl
 ## 2. 用語
 
 関連システムと同じ語は th-system [Spec.md](../../../../th-system/docs/plan/spec/Spec.md) §2・fk-system [Spec.md](../../../../fk-system/docs/plan/spec/Spec.md) §2 をそのまま使う。
+開発の時期の呼び名（追従期・確認期・測定期。略号 `ERA-1`〜`ERA-3`）も fk-system [Spec.md](../../../../fk-system/docs/plan/spec/Spec.md) §2 に従う（定義は写さない。検索には略号を使う）。
 ここには本システムで新たに要る語だけを足す。
 
 | 用語 | 意味 |
