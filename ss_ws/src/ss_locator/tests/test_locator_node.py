@@ -619,3 +619,78 @@ def test_node_real_path_no_camera(monkeypatch):
     finally:
         rig.close()
         lift_server.stop()
+
+
+def test_node_real_path_snapshot_pose_unknown(monkeypatch):
+    # 静止画の応答の X-Boot-Id が state の boot_id と違う（撮っている間に再起動した）
+    monkeypatch.setattr(locator_node, "Detector", _NoLugDetector)
+    lift_server = _start_lift_server()
+    camera_server = CameraStubServer()
+    camera_server.start()
+    camera_server.set_auto_state(
+        {
+            "t": "state",
+            "seq": 1,
+            "boot_id": "boot-1",
+            "pitch_deg": -20.0,
+            "yaw_deg": 10.0,
+            "yaw_zeroed": True,
+            "yaw_dps": 10.0,
+            "owner": None,
+            "owner_name": None,
+            "owner_operator": None,
+            "aim": None,
+        },
+        arrive_on_aim=True,
+    )
+    camera_server.set_snapshots(
+        [
+            (
+                200,
+                {
+                    "X-Boot-Id": "boot-2",
+                    "X-Yaw-Deg": 30.0,
+                    "X-Pitch-Deg": -35.0,
+                    "X-Still-Ms": 1000,
+                    "X-Frame-Age-Ms": 10,
+                },
+                _jpeg(),
+            )
+        ]
+    )
+    rig = Rig(
+        parameter_overrides=_real_parameters(
+            lift_server, "127.0.0.1:%d" % camera_server.port
+        )
+    )
+    try:
+        rig.wait_until(
+            lambda: rig.node._core._lift is not None
+            and rig.node._core._lift.height_m is not None
+            and rig.node._core._camera is not None
+            and rig.node._core._camera.pose_known,
+            10.0,
+            "昇降部・カメラの状態が届かない",
+        )
+        goal_handle = rig.send_goal(azimuth_from_rad=0.0, azimuth_span_rad=0.3)
+        assert goal_handle.accepted
+
+        def gotos():
+            return [m for m in lift_server.messages if m.get("t") == "goto"]
+
+        rig.wait_until(lambda: gotos(), 10.0, "goto が届かない")
+        target_mm = gotos()[0]["target_mm"]
+        arrived = dict(REAL_LIFT_STATE)
+        arrived["height_mm"] = target_mm
+        arrived["goto"] = {
+            "by": "ss", "press": gotos()[0]["press"], "target_mm": target_mm,
+            "status": "ARRIVED", "reason": "NONE",
+        }
+        lift_server.set_auto_state(arrived)
+
+        result = rig.get_result(goal_handle, timeout=20.0)
+        assert result.reason == "camera_pose_unknown"
+    finally:
+        rig.close()
+        camera_server.stop()
+        lift_server.stop()
