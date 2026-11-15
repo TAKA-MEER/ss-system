@@ -133,6 +133,9 @@
 | `hello_message` | 関数 | `hello` の dict を返す（[-hve.md](DetailedDesign-hve.md) §2.1） |
 | `ss_locator/hve_lift.py` | ファイル（つなぐ） | `HveLift`（`apply`・`advance`・`close`。[-hve.md](DetailedDesign-hve.md) §5） |
 | `LIFT_WS_MODULE_PATH` | 定数（`hve_lift.py`） | `/ws/module`。パラメータにしない |
+| `LiftLink.set_speeds` | メソッド | 昇降部の設定から取った上昇・下降の速さを渡す（[-hve.md](DetailedDesign-hve.md) §2.2） |
+| `LIFT_SETTINGS_PATH` | 定数（`hve_lift.py`） | `/api/settings` |
+| `LIFT_MAX_RUN_RETRY` | 定数（`hve_lift_core.py`） | 3。**暫定**（`MAX_RUN` で送り直す回数の上限。[-hve.md](DetailedDesign-hve.md) §4 の 5a） |
 | `LIFT_NAME`・`LIFT_BUSY_LABEL` | 定数（`hve_lift_core.py`） | `ss`・「画像認識で操作中」（2026-11-05 に hve と取り決めた値） |
 | `LiftState.height_m` の `None` | `locate_core.py` | 高さが読めない（[-hve.md](DetailedDesign-hve.md) §3） |
 | `tests/test_hve_lift_core.py`・`tests/test_hve_lift.py`・`tests/lift_stub_server.py` | 試験 | `WP-HVE-01`。`lift_stub_server.py` は試験の中だけで使う小さな WebSocket のサーバ（受けた文を覚え、渡された `state` を送る） |
@@ -141,7 +144,6 @@
 | --- | --- | --- | --- |
 | `hve_lift` | — | false | 昇降機だけ hve の口を使う。`use_fakes` が true のときだけ意味を持つ（カメラが本物になる `WP-HVE-02` までの確認用） |
 | `lift_host` | — | `hve-lift.local` | 先方（hve [DetailedDesign-protocol-modules.md](../../../../hve-system/docs/plan/detailed/DetailedDesign-protocol-modules.md) §1.4）。`host` か `host:port`。コンテナの中から名前が引けなければ IP を与える（**実機で確かめる**） |
-| `lift_speed_mm_s` | mm/s | 40 | **暫定**（hve の文書の例の値。昇降部の設定の範囲に入る値を実機で決める。[-open.md](DetailedDesign-open.md) §1 の 9） |
 | `lift_cmd_period_ms` | ms | 100 | 先方（hve が勧める間隔。2026-11-05 に hve へ答えた値） |
 | `lift_state_timeout_ms` | ms | 600 | 2026-11-05 に hve へ答えた値（`state` の配信は hve の仮値で 100 ms ごと） |
 

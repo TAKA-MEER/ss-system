@@ -1,7 +1,7 @@
 # hve-system とつなぐ部分（案）
 
 [DetailedDesign.md](DetailedDesign.md) の詳細。本システムが hve-system の昇降部・カメラモジュールとつなぐ所。
-**状態: 2026-11-15 案。昇降部の分（§1〜§5）だけ書いた。カメラモジュールの分（§6）は hve の口を待つ。**名前の一覧は [-names.md](DetailedDesign-names.md) §7。決まっていないことは [-open.md](DetailedDesign-open.md) §1。
+**状態: 2026-11-15 案。2026-11-16 に hve-system の答え（[Spec-open.md](../spec/Spec-open.md) §3）で直した。昇降部の分（§1〜§5）だけ書いた。カメラモジュールの分（§6）は hve の口を待つ。**名前の一覧は [-names.md](DetailedDesign-names.md) §7。決まっていないことは [-open.md](DetailedDesign-open.md) §1。
 
 - 相手の口の正は hve [DetailedDesign-protocol-modules.md](../../../../hve-system/docs/plan/detailed/DetailedDesign-protocol-modules.md)（昇降部。2026-11-05 に本システムが確かめた）と hve [DetailedDesign-names.md](../../../../hve-system/docs/plan/detailed/DetailedDesign-names.md) §3（止めた理由）。**形は写さない。**ここには本システムの使い方だけ書く。
 - 入力は [Spec.md](../spec/Spec.md) §1.1（人が操作に割り込んだとき・見つからない理由）・§1.2（高さの出どころ・撮り方）と [-core.md](DetailedDesign-core.md) §5・§6。
@@ -50,10 +50,18 @@ WebSocket のライブラリは **`websockets`（pip）**（案。クライア�
 | 文 | 入れる値 |
 | --- | --- |
 | `hello` | `name`: `ss` ／ `role`: `control` ／ `operator`: `auto` ／ `ceiling_sensor`: `false` ／ `busy_label`: 「画像認識で操作中」（UTF-8 で 24 バイト。上限 48） ／ `fw`: パッケージ `ss_locator` の版 |
-| `goto` | `press`・`target_mm`・`speed`（`lift_speed_mm_s`）。**`ceiling` は載せない**（距離計を持たない） |
+| `goto` | `press`・`target_mm`・`speed`（§2.2）。**`ceiling` は載せない**（距離計を持たない） |
 | `release` | `press`（最後の `goto` と同じ値） |
 
 繋ぐ先は `ws://<lift_host>/ws/module`。**`/ws/module` はコードの定数にし、パラメータにしない**（`/ws/ui` に繋ぐと天井の守りが外れる。hve と同じ扱い）。
+
+### 2.2 速さ（2026-11-16 hve の答え）
+
+`goto` の `speed` は、**昇降部の設定（`GET http://<lift_host>/api/settings`）から取る**: 上昇は `lift_up.init`、下降は `lift_down.init`。それぞれ `min`〜`max` に収める。昇降部は設定の範囲に丸めないので、本システムが収める。
+
+- 取るのは `HveLift`（繋ぐたびに 1 回）。`LiftLink` には `set_speeds(up_mm_s, down_mm_s)` で渡す。
+- **取れていない間に `LiftGoto` を受けたら、動かさずに `refused`**（速さを決め打ちで送らない）。
+- 向きは、`LiftGoto` を受けたときの高さと目標を比べて決める。
 
 ## 3. `state` から `LiftState` へ
 
@@ -78,13 +86,16 @@ WebSocket のライブラリは **`websockets`（pip）**（案。クライア�
 | 1 | `state.owner_operator` が `human`（人が昇降機を動かしている） | `human` | `human_override` |
 | 2 | 自分の `goto` の `reason` が `PREEMPTED`（取って代わられた） | `human` | `human_override` |
 | 3 | `state.owner` が `null` でなく、`owner_name` が `ss` でもない（ほかの上部モジュール・アームの制御器が動かしている） | `human` | `human_override`（**名前が実態と合わない**。[-open.md](DetailedDesign-open.md) §1 の 8） |
-| 4 | 自分の `goto` が `NOT_ARRIVED` で、`reason` が `CEILING_NEAR`・`CEILING_STALE`・`TOP`・`TARGET_RANGE` | `ceiling` | 光学中心が `min_camera_height_m` 以上なら続ける。届かなければ `camera_too_low` |
+| 4 | **上昇の** `goto` が `NOT_ARRIVED` で、`reason` が `CEILING_NEAR`・`CEILING_STALE`・`TOP`・`TARGET_RANGE` | `ceiling` | 光学中心が `min_camera_height_m` 以上なら続ける。届かなければ `camera_too_low` |
 | 5 | 下降の `goto` が `NOT_ARRIVED` で、`reason` が `BOTTOM` | `none`（`arrived` を true） | （着いた扱い） |
-| 6 | 自分の `goto` が `NOT_ARRIVED` で、上のどれでもない（`HEIGHT_UNKNOWN`・`ENCODER_STALL`・`ARM_LINK`・`MAX_RUN`・`CMD_TIMEOUT`・`OWNER_GONE`・`CMD_STOP`・**知らない名前**） | `refused` | `lift_refused` |
+| 5a | 自分の `goto` が `NOT_ARRIVED` で、`reason` が `MAX_RUN`（連続駆動の上限） | `none`（**`press` を 1 増やして同じ目標を送り直す**。1 つの `LiftGoto` につき `LIFT_MAX_RUN_RETRY` 回まで。超えたら `refused`） | （続ける） |
+| 6 | 自分の `goto` が `NOT_ARRIVED` で、上のどれでもない（`HEIGHT_UNKNOWN`・`ENCODER_STALL`・`ARM_LINK`・`CMD_TIMEOUT`・`OWNER_GONE`・`CMD_STOP`・**知らない名前**） | `refused` | `lift_refused` |
 | 7 | 繋がっていない・`state` が `lift_state_timeout_ms` より古い | `refused` | `lift_refused` |
 
 - 1〜3 は 2026-11-05 に hve へ答えた使い方のとおり（「`goto.status` が `PREEMPTED`、または `owner_operator` が `human` を見たら、すぐ止まり、戻さずに手を離す」）。**3 を足したのは、取って代わった相手を後片付けの `goto` で奪い返さないため**（`refused` にすると、`locate_core` が元の高さへ戻す `goto` を出す）。
 - 1・3 は、着いて `goto` を送っていない間（`SCANNING`）も見る。**命令が無い間（`IDLE`）は見ない**（`stopped_reason` は `none`）。
+- **2026-11-16 に hve が分け方を確かめた**（合っている）。hve の補足: `CEILING_STALE` は天井が近いのではなく「天井の値が無い」（カメラモジュールが繋がっていない・値が古い）。**どちらも `camera_too_low` で返すが、`HveLift` は hve の理由の名前をログに出す**（人が切り分けられるように。依頼する側へ分けて返すかは [-open.md](DetailedDesign-open.md) §1 の 11）。`TARGET_RANGE` は目標が 0 未満のときにも出るので、下降では 6 に入れる。`MAX_RUN` は新しい `press` で続けられる（5a）。
+- 着いた周期で持ち主は `null` に戻る（hve の答え）。昇降部の画面で人が操作している間は `owner` が `ui`・`owner_name` が `null` なので、1 と 3 の両方に当たる。
 - 知らない名前を `refused` に倒すのは、hve が止めた理由を足しても、動かない側に倒れるようにするため。
 - 7 のあと繋ぎ直せても、その命令は続けない（`LiftRelease` を受けるまで `refused` のまま）。
 
@@ -102,7 +113,7 @@ WebSocket のライブラリは **`websockets`（pip）**（案。クライア�
 
 `locator_node` は状態の周期（`status_period_ms`。200 ms）で `advance` を呼んで `LiftState` を `locate_core` に渡す。人の割り込みで**送るのをやめるのは `LiftLink` の中**（`poll`）なので、止まるまでの遅れは `lift_cmd_period_ms` で決まる（ノードの周期を待たない）。
 
-**偽の天井の値を送る道具は作らない。**本システムが `ceiling_sensor: true` を名乗る接続を持つと、実機に向けたとき天井の守りが外れる。手で確かめるときの天井の値は、hve の偽のカメラモジュールから出す。
+**偽の天井の値を送る道具は作らない。**本システムが `ceiling_sensor: true` を名乗る接続を持つと、実機に向けたとき天井の守りが外れる。手で確かめるときの天井の値は、hve の道具 `tools/lift_probe.py`（`--name hve-cam`）から出す（2026-11-16 hve の答え。手順は [-packets.md](DetailedDesign-packets.md) `WP-HVE-01`）。
 
 ## 6. カメラモジュール（待ち）
 
@@ -112,7 +123,7 @@ hve が口を書いたら、本システムが確かめる（[Spec-open.md](../s
 | --- | --- |
 | 静止画: 1280×720・倍率に関係なく全体が写る 1 枚・要るときだけ要求 | [Spec.md](../spec/Spec.md) §1.1 |
 | ピッチ: 目標角を指定して向けられる。今の目標角と、カメラモジュールが再起動したことが読める | [Spec-open.md](../spec/Spec-open.md) §3 2026-11-05（hve の答え） |
-| ヨー: 向きを指定して向けられるか・今の向きが読めるか・届く範囲（[-open.md](DetailedDesign-open.md) §1 の 4）。hve の今の制御はヨーを速さで指示し、角度を持たない | hve `H-A11`・hve [DetailedDesign-protocol.md](../../../../hve-system/docs/plan/detailed/DetailedDesign-protocol.md) §5 |
+| ヨー: 向きを指定して向けられるか・今の向きが読めるか・届く範囲（[-open.md](DetailedDesign-open.md) §1 の 4）。**2026-11-16 hve の決定**: 向きはモータを回した量から数え、原点は人がカメラを正面に合わせて画面のボタンで 0° にする。原点を合わせる前と再起動のあとは向きが `null`（案）。角度を指示して向ける口を作る。回せる範囲は全周。**向きが `null` のときの本システムの扱いは、口の案が来てから決める** | hve `H-A11`・hve [DetailedDesign-protocol.md](../../../../hve-system/docs/plan/detailed/DetailedDesign-protocol.md) §5 |
 | 人の割り込み: カメラ（ヨー・ピッチ）を人が動かしたことが分かるか | [-core.md](DetailedDesign-core.md) §6 |
 | 省電力: 操作が 30 分無いと映像が止まり、ピッチの力が抜ける。本システムの操作・静止画の要求で戻るか、戻るまで何秒待つか | hve [DetailedDesign-power.md](../../../../hve-system/docs/plan/detailed/DetailedDesign-power.md)（本システムの口の案に `touch()` を書く、とある） |
 | 元の向きに戻す: 依頼を受ける前のヨー・ピッチが読めるか | [Spec.md](../spec/Spec.md) §1.1 |
