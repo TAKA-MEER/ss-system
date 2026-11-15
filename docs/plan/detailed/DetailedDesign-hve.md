@@ -12,7 +12,7 @@
 
 | 項目 | 案 |
 | --- | --- |
-| 相手の状態（2026-11-15） | 昇降部の口は hve の `main` に入った（`WP-LIFT-13`・`WP-LIFTUI-03`・`WP-CAM-10`。**実機はまだ**）。**`goto` は偽の昇降部（hve `tools/fake_lift_server.py`）にだけあり、ファームは未着手**（hve `WP-LIFT-14`）。カメラモジュールが本システムに開く口は未着手（hve [ImplementationPlan.md](../../../../hve-system/docs/plan/ImplementationPlan.md) §6 の行 8a） |
+| 相手の状態（2026-11-15） | 昇降部の口は hve の `main` に入った（`WP-LIFT-13`・`WP-LIFTUI-03`・`WP-CAM-10`。**実機はまだ**）。**`goto` のファームも 2026-11-16 に hve の `main` に入った**（hve `WP-LIFT-14`。`af1eb0f`。**昇降部への書き込みと実機での確認はまだ**）。偽の昇降部と違う点（hve の知らせ）: 実行中に高さが読めなくなると `HEIGHT_UNKNOWN` で止まる（下降も。§4 の 6 に入る）／ 目標が上端ちょうどなら受け付ける。**着く前に速さを落とさないので、速すぎると行き過ぎて往復しうる。実機で確かめるまでは設定の初期値で送る**（§2.2 のとおり）。カメラモジュールが本システムに開く口は未着手（hve [ImplementationPlan.md](../../../../hve-system/docs/plan/ImplementationPlan.md) §6 の行 8a） |
 | 分け方 | **昇降部とカメラモジュールを別のパケットにする**（`WP-HVE-01` 昇降部・`WP-HVE-02` カメラモジュール）。昇降部の分は、偽の昇降部を相手に今から作って確かめられる |
 | 層 | **純関数 `hve_lift_core.py`**（送る文を決める・`state` を `LiftState` に直す）と、**つなぐ `hve_lift.py`**（WebSocket の送受信と繋ぎ直し）（`DD-2`） |
 | `locate_core` | **変えるのは 1 点だけ**: `LiftState.height_m` に「読めない」（`None`）を足す（§3） |
