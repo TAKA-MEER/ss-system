@@ -11,6 +11,7 @@ from rclpy.executors import MultiThreadedExecutor
 from rclpy.parameter import Parameter
 from rclpy.qos import DurabilityPolicy, QoSProfile, ReliabilityPolicy
 
+from lift_stub_server import LiftStubServer
 from ss_locator.locator_node import LocatorNode
 from ss_msgs.action import LocatePanels
 from ss_msgs.msg import CleanupDone, LocatorStatus
@@ -323,3 +324,64 @@ def test_node_cleanup_immediate_ordering():
         assert any(status.last_reject_reason == "busy" for _, status in statuses)
     finally:
         rig.close()
+
+
+def test_node_uses_hve_lift():
+    # 昇降機だけ HveLift。小さなサーバを昇降部に見立てる
+    server = LiftStubServer()
+    server.start()
+    server.set_settings(
+        {
+            "lift_up": {"min": 10, "max": 60, "init": 30},
+            "lift_down": {"min": 10, "max": 60, "init": 20},
+        }
+    )
+    base_state = {
+        "t": "state",
+        "height_mm": 0,
+        "height_ok": True,
+        "owner": None,
+        "owner_name": None,
+        "owner_operator": None,
+        "goto": None,
+    }
+    server.set_auto_state(base_state)
+    rig = Rig(
+        parameter_overrides=parameters(
+            hve_lift=True,
+            lift_host="127.0.0.1:%d" % server.port,
+            lift_cmd_period_ms=50,
+            lift_state_timeout_ms=500,
+        )
+    )
+
+    def goto_messages():
+        return [m for m in server.messages if m.get("t") == "goto"]
+
+    try:
+        rig.wait_until(
+            lambda: rig.node._last_lift.height_m is not None, 10.0, "高さが届かない"
+        )
+        goal_handle = rig.send_goal()
+        assert goal_handle.accepted
+
+        rig.wait_until(lambda: goto_messages(), 10.0, "goto が届かない")
+        first = goto_messages()[0]
+        assert first["target_mm"] == 200
+        assert first["speed"] == 30
+
+        # 人が操作を始めた
+        human = dict(base_state)
+        human["owner"] = "ui"
+        human["owner_operator"] = "human"
+        server.set_auto_state(human)
+
+        result = rig.get_result(goal_handle, timeout=15.0)
+        assert result.reason == "human_override"
+
+        count = len(goto_messages())
+        time.sleep(0.5)
+        assert len(goto_messages()) == count  # そのあと goto は届かない
+    finally:
+        rig.close()
+        server.stop()

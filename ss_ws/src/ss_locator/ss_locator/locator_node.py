@@ -26,6 +26,7 @@ from unique_identifier_msgs.msg import UUID
 
 from . import assemble, geometry, scan_plan
 from .fakes import FakeCamera, FakeDetector, FakeLift
+from .hve_lift import HveLift
 from .locate_core import (
     CameraPoint,
     Cancel,
@@ -82,7 +83,7 @@ class LocatorNode(Node):
 
         if not self.use_fakes:
             raise RuntimeError(
-                "use_fakes=false: 本物の hve-system とつなぐ部分は WP-HVE-01 まで無い"
+                "use_fakes=false: 本物のカメラモジュールとつなぐ部分は WP-HVE-02 まで無い"
             )
 
         self._lock = threading.RLock()
@@ -90,10 +91,18 @@ class LocatorNode(Node):
 
         self._core = LocateCore(self._core_parameters())
 
-        self._lift = FakeLift()
+        self._lift = (
+            HveLift(
+                self.lift_host,
+                cmd_period_ms=self.lift_cmd_period_ms,
+                state_timeout_ms=self.lift_state_timeout_ms,
+            )
+            if self.hve_lift
+            else FakeLift()
+        )
         self._camera = FakeCamera(self.fake_fixture, scene=self.fake_scene)
         self._detector = FakeDetector(self.fake_fixture, scene=self.fake_scene)
-        self._last_lift = self._lift.state()
+        self._last_lift = self._lift.advance(0.0)
 
         self._events = []
         self._results = {}
@@ -116,7 +125,7 @@ class LocatorNode(Node):
 
         # 受け付けの判定が昇降機・カメラの今の状態を見られるように、最初の状態を渡しておく
         with self._lock:
-            self._events.append(self._lift.state())
+            self._events.append(self._last_lift)
             self._events.append(self._camera.state())
             self._drain(self._last_tick)
 
@@ -168,6 +177,11 @@ class LocatorNode(Node):
         )
         self.declare_parameter("fake_scene", 0)
 
+        self.declare_parameter("hve_lift", False)
+        self.declare_parameter("lift_host", "hve-lift.local")
+        self.declare_parameter("lift_cmd_period_ms", 100)
+        self.declare_parameter("lift_state_timeout_ms", 600)
+
     def _read_parameters(self):
         def value(name):
             return self.get_parameter(name).value
@@ -199,6 +213,11 @@ class LocatorNode(Node):
         self.use_fakes = bool(value("use_fakes"))
         self.fake_fixture = str(value("fake_fixture"))
         self.fake_scene = int(value("fake_scene"))
+
+        self.hve_lift = bool(value("hve_lift"))
+        self.lift_host = str(value("lift_host"))
+        self.lift_cmd_period_ms = int(value("lift_cmd_period_ms"))
+        self.lift_state_timeout_ms = int(value("lift_state_timeout_ms"))
 
         self.status_period_s = max(0.001, self.status_period_ms / 1000.0)
 
@@ -461,6 +480,8 @@ class LocatorNode(Node):
     # ------------------------------------------------------------------ 終了
     def destroy_node(self):
         self._shutdown = True
+        if isinstance(self._lift, HveLift):
+            self._lift.close()
         for event in list(self._result_events.values()):
             event.set()
         super().destroy_node()

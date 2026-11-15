@@ -13,6 +13,7 @@ from ss_locator.locate_core import (
     FrameDone,
     GoalRequest,
     LiftGoto,
+    LiftState,
     LocateCore,
     RequestFrame,
     SendCleanupDone,
@@ -326,6 +327,44 @@ def test_core_reason_lift_refused_without_height():
 
 def test_core_reason_camera_too_low():
     rig = Rig(lift=FakeLift(height_m=0.0, speed_m_s=10.0, max_height_m=2.0))
+    rig.prime()
+    assert rig.accept(goal()) is None
+    rig.advance(0.0)
+    rig.advance(1.0)
+    rig.finish_cleanup(0.0)
+
+    results = rig.results()
+    assert len(results) == 1
+    assert results[0].reason == "camera_too_low"
+
+
+def test_core_height_none_refused():
+    rig = Rig()
+    # 高さが「読めない」（None）で届いている
+    rig.post(LiftState(None))
+    rig.post(rig.camera.state())
+    rig.flush()
+    assert rig.accept(goal()) is None
+    rig.advance(0.0)
+
+    results = rig.results()
+    assert len(results) == 1
+    assert results[0].reason == "lift_refused"
+    assert not any(isinstance(c, LiftGoto) for c in rig.commands)
+    dones = rig.cleanup_dones()
+    assert len(dones) == 1
+    assert dones[0].lift_restored is False
+
+
+def test_core_ceiling_unknown_like_ceiling():
+    class UnknownCeilingLift(FakeLift):
+        def advance(self, dt_s):
+            state = super().advance(dt_s)
+            if self._arrived:
+                return LiftState(state.height_m, False, "ceiling_unknown")
+            return state
+
+    rig = Rig(lift=UnknownCeilingLift(height_m=0.0, speed_m_s=10.0, max_height_m=2.0))
     rig.prime()
     assert rig.accept(goal()) is None
     rig.advance(0.0)
