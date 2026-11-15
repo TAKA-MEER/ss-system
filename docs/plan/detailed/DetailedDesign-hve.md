@@ -193,6 +193,13 @@ hve が口を書いたら、本システムが確かめる（[Spec-open.md](../s
 
 1 は、着いて `aim` を送っていない間（撮っている間）も見る。命令が無い間は見ない。
 
+**`WP-HVE-02` で決めたこと**（2026-11-17。実装のとき設計書に無かった所）:
+
+- **命令の途中で `state` が古くなる・切れる**と、`pose_known` が false と `failed` が true の両方になる。`locate_core` は `failed` を先に見るので `no_image`。**受け付けの時点で繋がっていない**ときは `camera_pose_unknown`。
+- **ヨーを向けない命令**（`yaw_rad` が `None`）では、`yaw_zeroed` と `YAW_UNKNOWN` を見ない（見ると、再起動のあとのピッチだけの後片付けが止まる）。`boot_id` の変化はどの命令でも見る。
+- `frame_verdict` は、200 でも `X-Still-Ms`・`X-Frame-Age-Ms`・`X-Pitch-Deg` のどれかが無い・読めないときは `fail`。ヘッダの名前は大文字と小文字を区別しない。**引数 `since_arrived_ms` は受けるが使っていない**（`X-Still-Ms` が同じ役目をする）。
+- カメラモジュールへの名乗りの名前と表示は、昇降部と同じ定数（`LIFT_NAME`・`LIFT_BUSY_LABEL`）を使う。
+
 ### 7.2 静止画（`frame_verdict`。純関数）
 
 `HveCamera.capture()` が応答を受けるたびに、`frame_verdict(status, headers, boot_id, since_arrived_ms)` で扱いを決める。
@@ -219,6 +226,8 @@ hve が口を書いたら、本システムが確かめる（[Spec-open.md](../s
 | `lift_restored` | 昇降機を戻せたか | 変えない（カメラの向きを戻せたかは含めない。[-locate.md](DetailedDesign-locate.md) §3） |
 
 偽のカメラ（`FakeCamera`）は、向けた次の `state()` で `arrived` を返す（今の試験の時間の流れを大きく変えない）。
+
+**`WP-HVE-02` で決めたこと**（2026-11-17）: 後片付け中にカメラが `failed` になったら、カメラは待たずに終える（向けられないものを上限まで待たない）。後片付けが上限で終わる・カメラを取って代わられたときの `lift_restored` は、昇降機が着いていれば true。**ノードは、カメラの状態を周期ごとに `locate_core` へ渡す**（昇降機の分を処理したあと。本物のカメラの「着いた」「取って代わられた」「向けられない」はこの道でだけ届く）。
 
 ### 7.4 `HveCamera`（つなぐ）と `locator_node`（`WP-HVE-03`）
 
