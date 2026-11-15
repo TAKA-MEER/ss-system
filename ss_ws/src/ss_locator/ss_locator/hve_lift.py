@@ -2,7 +2,7 @@
 
 自分のスレッド 1 本で繋ぎ、`LiftLink` が返した文を送り、受けた `state` を渡す。
 `FakeLift` と同じ `apply`・`advance` を持ち、`locator_node` は差し替えるだけで使える。
-詳細設計: `docs/plan/detailed/DetailedDesign-hve.md` §5、
+詳細設計: `docs/plan/detailed/DetailedDesign-hve.md` §2.2・§5、
 `docs/plan/detailed/DetailedDesign-names.md` §7。
 """
 from __future__ import annotations
@@ -11,6 +11,7 @@ import asyncio
 import json
 import threading
 import time
+import urllib.request
 
 import websockets
 
@@ -18,27 +19,40 @@ from .hve_lift_core import LiftLink
 from .locate_core import LiftRelease
 
 LIFT_WS_MODULE_PATH = "/ws/module"
+LIFT_SETTINGS_PATH = "/api/settings"
+
+_SETTINGS_TIMEOUT_S = 1.0
+
+
+def _clamped_init(axis):
+    """設定の 1 軸（`min`・`max`・`init`）から、`min`〜`max` に収めた `init` を返す。"""
+    lo, hi, init = axis["min"], axis["max"], axis["init"]
+    for value in (lo, hi, init):
+        if isinstance(value, bool) or not isinstance(value, (int, float)):
+            raise ValueError("設定の値が数でない")
+    return int(round(max(lo, min(hi, init))))
+
+
+def speeds_from_settings(body):
+    """`GET /api/settings` の本文（dict）から (上昇, 下降) の速さ [mm/s] を返す。読めなければ例外。"""
+    settings = body.get("settings", body)
+    return _clamped_init(settings["lift_up"]), _clamped_init(settings["lift_down"])
 
 
 class HveLift:
     """hve-system の昇降部（`/ws/module`）につなぐ。"""
 
-    def __init__(
-        self,
-        host,
-        speed_mm_s=40,
-        cmd_period_ms=100,
-        state_timeout_ms=600,
-        fw=None,
-    ):
-        self._url = "ws://" + str(host) + LIFT_WS_MODULE_PATH
+    def __init__(self, host, cmd_period_ms=100, state_timeout_ms=600, fw=None):
+        self._host = str(host)
+        self._url = "ws://" + self._host + LIFT_WS_MODULE_PATH
+        self._settings_url = "http://" + self._host + LIFT_SETTINGS_PATH
         self._link = LiftLink(
-            speed_mm_s=speed_mm_s,
             cmd_period_ms=cmd_period_ms,
             state_timeout_ms=state_timeout_ms,
             fw=fw,
         )
         self._cmd_period_s = max(0.001, float(cmd_period_ms) / 1000.0)
+        self._retry_s = self._cmd_period_s * 10.0
         self._lock = threading.RLock()
         self._loop = None
         self._ws = None
@@ -73,13 +87,18 @@ class HveLift:
             loop = self._loop
             ws = self._ws
             self._closed = True
-        self._send([m for m in messages if m.get("t") == "release"], loop, ws)
+        futures = self._send([m for m in messages if m.get("t") == "release"], loop, ws)
+        for future in futures:
+            try:
+                future.result(timeout=1.0)
+            except Exception:
+                pass
         if loop is not None and ws is not None:
             try:
                 asyncio.run_coroutine_threadsafe(ws.close(), loop)
             except Exception:
                 pass
-        self._thread.join(timeout=2.0)
+        self._thread.join(timeout=3.0)
 
     # ------------------------------------------------------------------ スレッド
     def _run(self):
@@ -88,16 +107,48 @@ class HveLift:
         except Exception:
             pass
 
+    def _fetch_speeds(self):
+        """設定を読んで (上昇, 下降)。取れなければ `None`。"""
+        try:
+            with urllib.request.urlopen(
+                self._settings_url, timeout=_SETTINGS_TIMEOUT_S
+            ) as response:
+                body = json.loads(response.read().decode("utf-8"))
+            return speeds_from_settings(body)
+        except Exception:
+            return None
+
+    async def _refresh_speeds(self):
+        speeds = await asyncio.to_thread(self._fetch_speeds)
+        with self._lock:
+            if speeds is None:
+                self._link.set_speeds(None, None)
+            else:
+                self._link.set_speeds(*speeds)
+        return speeds is not None
+
+    async def _sleep(self, seconds):
+        end = time.monotonic() + seconds
+        while not self._closed:
+            remaining = end - time.monotonic()
+            if remaining <= 0.0:
+                return
+            await asyncio.sleep(min(0.05, remaining))
+
     async def _main(self):
         while not self._closed:
             try:
+                # 繋ぐたびに速さを読み直す（取れなければ、繋いだあとも周期的に試す）
+                have_speeds = await self._refresh_speeds()
+                last_try = time.monotonic()
                 async with websockets.connect(self._url, open_timeout=5.0) as ws:
                     loop = asyncio.get_running_loop()
                     with self._lock:
                         self._loop = loop
                         self._ws = ws
-                        self._link.on_connected(time.monotonic())
-                        messages, _ = self._link.poll(time.monotonic())
+                        now = time.monotonic()
+                        self._link.on_connected(now)
+                        messages, _ = self._link.poll(now)
                     for message in messages:
                         await ws.send(json.dumps(message, ensure_ascii=False))
 
@@ -106,6 +157,12 @@ class HveLift:
                         await asyncio.sleep(self._cmd_period_s)
                         if receiver.done():
                             break
+                        if (
+                            not have_speeds
+                            and time.monotonic() - last_try >= self._retry_s
+                        ):
+                            have_speeds = await self._refresh_speeds()
+                            last_try = time.monotonic()
                         with self._lock:
                             if self._ws is not ws:
                                 break
@@ -133,9 +190,7 @@ class HveLift:
                     self._loop = None
                     self._ws = None
                     self._link.on_closed(time.monotonic())
-            if self._closed:
-                break
-            await asyncio.sleep(self._cmd_period_s * 10.0)
+            await self._sleep(self._retry_s)
 
     async def _receive(self, ws):
         try:
@@ -152,13 +207,16 @@ class HveLift:
             pass
 
     def _send(self, messages, loop, ws):
+        futures = []
         if not messages or loop is None or ws is None:
-            return
+            return futures
         for message in messages:
             try:
                 future = asyncio.run_coroutine_threadsafe(
                     ws.send(json.dumps(message, ensure_ascii=False)), loop
                 )
                 future.add_done_callback(lambda f: f.exception())
+                futures.append(future)
             except Exception:
                 pass
+        return futures
