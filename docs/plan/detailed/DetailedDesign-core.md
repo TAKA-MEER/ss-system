@@ -102,7 +102,7 @@
 | --- | --- | --- | --- |
 | 受け付け | 依頼を確かめる（[-locate.md](DetailedDesign-locate.md) §2.1）。**カメラの向きが読めなければ、動かさずに `camera_pose_unknown`**（版 2）。**今の昇降機の高さ・カメラのヨー・ピッチの目標角を「元の高さ・向き」として覚える** | `RAISING` | 拒否（何も動かさない） |
 | `RAISING` | 昇降機を `scan_camera_height_m` に合わせる高さ（`scan_camera_height_m − camera_height_offset_m`）へ動かす。**受け付けた時点で昇降部の高さがまだ届いていなければ、動かさずに `lift_refused`**（原点を取る前の hve は目標の高さへの移動を受け付けないのと同じ扱い。元の高さが分からないので `lift_restored: false`） | 着いた → `SCANNING` | 光学中心が `min_camera_height_m` に届かないまま止まった（天井など）→ `camera_too_low`。拒否・動かない → `lift_refused` |
-| `SCANNING` | 撮るヨーの順に: ヨーとピッチを向ける → `settle_s` 待つ → 静止画を 1 枚要求 → 検出 → 金具を床に戻す | 全部撮った → `ESTIMATING` | 画像が `image_timeout_s` 来ない → `no_image`。**カメラの向きが読めなくなった（カメラモジュールが再起動した）→ `camera_pose_unknown`。撮り直さない**（再起動するとヨーの向きが読めなくなる。2026-11-16 ユーザー決定。`WP-LOC-03` で直す。それまでの実装は「捨てて撮り直す」のまま） |
+| `SCANNING` | 撮るヨーの順に: ヨーとピッチを向ける → `settle_s` 待つ → 静止画を 1 枚要求 → 検出 → 金具を床に戻す | 全部撮った → `ESTIMATING` | 画像が `image_timeout_s` 来ない → `no_image`。**カメラの向きが読めなくなった（カメラモジュールが再起動した）→ `camera_pose_unknown`。撮り直さない**（再起動するとヨーの向きが読めなくなる。2026-11-16 ユーザー決定。`WP-LOC-03` で直した。**上昇中に読めなくなっても同じ**） |
 | `ESTIMATING` | 撮った画像の金具をまとめて組み立て、返す盤に直す（§4） | 結果を返す → `CLEANING` | — |
 | `CLEANING` | 昇降機を元の高さへ、カメラのヨー・ピッチを元の向きへ戻す（`human_override` ではどれも戻さない）。カメラと昇降機から手を離す | 後片付けの完了を出す → `IDLE` | 後片付けの上限（[-locate.md](DetailedDesign-locate.md) §3。版 2 では距離 ÷ 速さ ＋ 余裕）を過ぎた → 手を離して `lift_restored: false` |
 

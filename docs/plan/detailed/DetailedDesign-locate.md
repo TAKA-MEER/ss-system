@@ -1,7 +1,7 @@
 # 盤の位置を探す口（案）
 
 [DetailedDesign.md](DetailedDesign.md) の詳細。依頼する側（fk-system ほか）と本システムのあいだの ROS 2 の口。
-**状態: 2026-11-05 fk-system が確かめた（案のとおり。版 `"1"`）。2026-11-16 に版 `"2"` の変更（理由 2 つ・`cleanup_limit_s`・後片付けの上限）を足した。**同日 fk-system が版 2 を確かめた（案のとおり。fk のユーザーの承認）。**実装は `WP-LOC-03` が入るまで版 `"1"` のまま。fk-system は版 2 の型で作り、版 `"1"` との両対応はしない。**作業パケットに切るまで実装しない。名前の一覧は [-names.md](DetailedDesign-names.md) §2・§3。
+**状態: 2026-11-05 fk-system が確かめた（案のとおり。版 `"1"`）。2026-11-16 に版 `"2"` の変更（理由 2 つ・`cleanup_limit_s`・後片付けの上限）を足した。**同日 fk-system が版 2 を確かめた（案のとおり。fk のユーザーの承認）。****2026-11-17 に実装も版 `"2"` になった**（`WP-LOC-03`。`98bd053`）。fk-system は版 2 の型で作り、版 `"1"` との両対応はしない。**作業パケットに切るまで実装しない。名前の一覧は [-names.md](DetailedDesign-names.md) §2・§3。
 
 - 入力は [Spec.md](../spec/Spec.md) §1.1（受け取るもの・返すもの・受け渡しの細部・見た方向の範囲）と §1.2（依頼の通り道）。
 - **名前に fk・測定を入れない**（`SSD-4`・`SSD-6`。ほかのシステムからも同じ口で依頼できるようにする）。
@@ -115,7 +115,7 @@
 | フィールド | 型 | 意味 |
 | --- | --- | --- |
 | `header` | std_msgs/Header | 出した時刻 |
-| `interface_version` | string | この口の版。**`"2"`**（2026-11-16。理由 2 つと `cleanup_limit_s` を足した。`WP-LOC-03` が入るまで、実装が出すのは `"1"`）。依頼する側は自分が知っている版と照合する |
+| `interface_version` | string | この口の版。**`"2"`**（2026-11-16。理由 2 つと `cleanup_limit_s` を足した）。依頼する側は自分が知っている版と照合する |
 | `phase` | string | `IDLE`（受けられる）／ `RUNNING`（依頼を実行中）／ `CLEANING`（結果を返し、後片付け中） |
 | `goal_id` | unique_identifier_msgs/UUID | 実行中・後片付け中の依頼。`IDLE` のときは全 0 |
 | `last_reject_reason` | string | 最後に拒否した依頼の理由（`busy`／`bad_range`／`bad_distance`／`bad_time_limit`）。無ければ空 |
