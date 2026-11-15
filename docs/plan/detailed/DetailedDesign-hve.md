@@ -86,7 +86,8 @@ WebSocket のライブラリは **`websockets`（pip）**（案。クライア�
 | 1 | `state.owner_operator` が `human`（人が昇降機を動かしている） | `human` | `human_override` |
 | 2 | 自分の `goto` の `reason` が `PREEMPTED`（取って代わられた） | `human` | `human_override` |
 | 3 | `state.owner` が `null` でなく、`owner_name` が `ss` でもない（ほかの上部モジュール・アームの制御器が動かしている） | `human` | `human_override`（**名前が実態と合わない**。[-open.md](DetailedDesign-open.md) §1 の 8） |
-| 4 | **上昇の** `goto` が `NOT_ARRIVED` で、`reason` が `CEILING_NEAR`・`CEILING_STALE`・`TOP`・`TARGET_RANGE` | `ceiling` | 光学中心が `min_camera_height_m` 以上なら続ける。届かなければ `camera_too_low` |
+| 4 | **上昇の** `goto` が `NOT_ARRIVED` で、`reason` が `CEILING_NEAR`・`TOP`・`TARGET_RANGE` | `ceiling` | 光学中心が `min_camera_height_m` 以上なら続ける。届かなければ `camera_too_low` |
+| 4a | **上昇の** `goto` が `NOT_ARRIVED` で、`reason` が `CEILING_STALE`（天井の値が無い） | `ceiling_unknown` | 光学中心が `min_camera_height_m` 以上なら続ける。届かなければ `ceiling_unknown`（**版 2**。`WP-LOC-03` が入るまでは `camera_too_low` にまとめる） |
 | 5 | 下降の `goto` が `NOT_ARRIVED` で、`reason` が `BOTTOM` | `none`（`arrived` を true） | （着いた扱い） |
 | 5a | 自分の `goto` が `NOT_ARRIVED` で、`reason` が `MAX_RUN`（連続駆動の上限） | `none`（**`press` を 1 増やして同じ目標を送り直す**。1 つの `LiftGoto` につき `LIFT_MAX_RUN_RETRY` 回まで。超えたら `refused`） | （続ける） |
 | 6 | 自分の `goto` が `NOT_ARRIVED` で、上のどれでもない（`HEIGHT_UNKNOWN`・`ENCODER_STALL`・`ARM_LINK`・`CMD_TIMEOUT`・`OWNER_GONE`・`CMD_STOP`・**知らない名前**） | `refused` | `lift_refused` |
@@ -94,7 +95,7 @@ WebSocket のライブラリは **`websockets`（pip）**（案。クライア�
 
 - 1〜3 は 2026-11-05 に hve へ答えた使い方のとおり（「`goto.status` が `PREEMPTED`、または `owner_operator` が `human` を見たら、すぐ止まり、戻さずに手を離す」）。**3 を足したのは、取って代わった相手を後片付けの `goto` で奪い返さないため**（`refused` にすると、`locate_core` が元の高さへ戻す `goto` を出す）。
 - 1・3 は、着いて `goto` を送っていない間（`SCANNING`）も見る。**命令が無い間（`IDLE`）は見ない**（`stopped_reason` は `none`）。
-- **2026-11-16 に hve が分け方を確かめた**（合っている）。hve の補足: `CEILING_STALE` は天井が近いのではなく「天井の値が無い」（カメラモジュールが繋がっていない・値が古い）。**どちらも `camera_too_low` で返すが、`HveLift` は hve の理由の名前をログに出す**（人が切り分けられるように。依頼する側へ分けて返すかは [-open.md](DetailedDesign-open.md) §1 の 11）。`TARGET_RANGE` は目標が 0 未満のときにも出るので、下降では 6 に入れる。`MAX_RUN` は新しい `press` で続けられる（5a）。
+- **2026-11-16 に hve が分け方を確かめた**（合っている）。hve の補足: `CEILING_STALE` は天井が近いのではなく「天井の値が無い」（カメラモジュールが繋がっていない・値が古い）。**2026-11-16 ユーザー決定で、理由を分けて返す**（4a。`HveLift` は hve の理由の名前もログに出す）。`TARGET_RANGE` は目標が 0 未満のときにも出るので、下降では 6 に入れる。`MAX_RUN` は新しい `press` で続けられる（5a）。
 - 着いた周期で持ち主は `null` に戻る（hve の答え）。昇降部の画面で人が操作している間は `owner` が `ui`・`owner_name` が `null` なので、1 と 3 の両方に当たる。
 - 知らない名前を `refused` に倒すのは、hve が止めた理由を足しても、動かない側に倒れるようにするため。
 - 7 のあと繋ぎ直せても、その命令は続けない（`LiftRelease` を受けるまで `refused` のまま）。
@@ -117,7 +118,7 @@ WebSocket のライブラリは **`websockets`（pip）**（案。クライア�
 
 ## 6. カメラモジュール（hve の案を確かめている最中）
 
-**2026-11-16 に hve が口の案を書いた**（hve [DetailedDesign-protocol-ss.md](../../../../hve-system/docs/plan/detailed/DetailedDesign-protocol-ss.md)。hve `9c4af5f`）。実装管理担当の見解は §6.1。**正式に「確かめた」と返すのは、ユーザーの承認のあと。**本システムの側の設計（`hve_camera.py`・`WP-HVE-02`）は、確かめ終えてから書く。
+**2026-11-16 に hve が口の案を書いた**（hve [DetailedDesign-protocol-ss.md](../../../../hve-system/docs/plan/detailed/DetailedDesign-protocol-ss.md)。hve `9c4af5f`）。実装管理担当の見解は §6.1。**2026-11-16 ユーザーの承認を得て「確かめた」と返した。**本システムの側の設計（`hve_camera.py`・`WP-HVE-02`）は、確かめ終えてから書く。
 
 以下は、案が来る前に並べた「見ること」（照らした結果は §6.1）。
 
@@ -132,14 +133,14 @@ hve が口を書いたら、本システムが確かめる（[Spec-open.md](../s
 | 省電力: 操作が 30 分無いと映像が止まり、ピッチの力が抜ける。本システムの操作・静止画の要求で戻るか、戻るまで何秒待つか | hve [DetailedDesign-power.md](../../../../hve-system/docs/plan/detailed/DetailedDesign-power.md)（本システムの口の案に `touch()` を書く、とある） |
 | 元の向きに戻す: 依頼を受ける前のヨー・ピッチが読めるか | [Spec.md](../spec/Spec.md) §1.1 |
 
-### 6.1 hve の案への見解（2026-11-16 実装管理担当。ユーザーの承認待ち）
+### 6.1 hve の案への見解（2026-11-16。ユーザーが承認し、hve へ返した）
 
 | hve が確かめてほしいこと | 見解 |
 | --- | --- |
 | 1. 口（WS `/ws/module` と `GET /api/snapshot`）と名乗り | よい（昇降部と同じ書き方で扱える） |
 | 2. `aim`（両軸を 1 つの命令で・片方だけ可・送り続ける・着いたら持ち主を離す・ピッチは渡した周期で着いた扱い） | よい。ピッチが動き終わるのを待つのは `settle_s` |
-| 3. ヨーの原点を合わせる前は向きが `null`・`aim` のヨーは受け付けない・原点合わせは人だけ | よい。**本システムは、向きが読めないときは動かさずに返す。その理由が今の一覧に無い**（[-open.md](DetailedDesign-open.md) §1 の 12） |
-| 4. 再起動は `boot_id` の変化で知る | よい。**再起動するとヨーが `null` に戻るので、「捨てて撮り直す」（[-core.md](DetailedDesign-core.md) §5）はできなくなる。**その依頼を理由を付けて終える形に直す（同 12） |
+| 3. ヨーの原点を合わせる前は向きが `null`・`aim` のヨーは受け付けない・原点合わせは人だけ | よい。本システムは、向きが読めないときは動かさずに `camera_pose_unknown` で返す（2026-11-16 ユーザー決定） |
+| 4. 再起動は `boot_id` の変化で知る | よい。**再起動するとヨーが `null` に戻るので、「捨てて撮り直す」（[-core.md](DetailedDesign-core.md) §5）はできなくなる。**その依頼を `camera_pose_unknown` で終える（2026-11-16 ユーザー決定） |
 | 5. 撮ってからの経過を `X-Frame-Age-Ms` で返す・200 ms に 1 枚まで | よい。向け終えて `settle_s` 待ったあとより前のコマ（経過が長いもの）は捨てて取り直す |
 | 6. 省電力は `aim`・静止画の要求で戻る | よい |
 

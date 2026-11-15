@@ -1,7 +1,7 @@
 # 盤の位置を探す口（案）
 
 [DetailedDesign.md](DetailedDesign.md) の詳細。依頼する側（fk-system ほか）と本システムのあいだの ROS 2 の口。
-**状態: 2026-11-05 fk-system が確かめた（案のとおり）。**作業パケットに切るまで実装しない。名前の一覧は [-names.md](DetailedDesign-names.md) §2・§3。
+**状態: 2026-11-05 fk-system が確かめた（案のとおり。版 `"1"`）。2026-11-16 に版 `"2"` の変更（理由 2 つ・`cleanup_limit_s`・後片付けの上限）を足した。fk-system の確認待ち。実装は `WP-LOC-03` が入るまで版 `"1"` のまま。**作業パケットに切るまで実装しない。名前の一覧は [-names.md](DetailedDesign-names.md) §2・§3。
 
 - 入力は [Spec.md](../spec/Spec.md) §1.1（受け取るもの・返すもの・受け渡しの細部・見た方向の範囲）と §1.2（依頼の通り道）。
 - **名前に fk・測定を入れない**（`SSD-4`・`SSD-6`。ほかのシステムからも同じ口で依頼できるようにする）。
@@ -55,6 +55,7 @@
 | `panels` | `PanelTop[]` | 見つけた盤（§2.3）。**途中で終わっても、それまでに見つけた盤は返す**。見つからなければ空 |
 | `seen_from_rad` | float32[] | 実際に撮って推定にかけた方向の範囲の開始（§1） |
 | `seen_span_rad` | float32[] | 同じく幅 |
+| `cleanup_limit_s` | float32 | **版 2。後片付けの上限 [s]。**`cleanup_done` は、この結果から遅くともこの秒数のうちに出る（§3）。戻すものが無い終わり方（`human_override` など）では 0 |
 
 途中経過（feedback）は `string phase`（`RAISING`／`SCANNING`／`ESTIMATING`）だけ。表示用で、依頼する側が判断に使わなくてよい。
 
@@ -85,7 +86,9 @@
 | `lugs_ungrouped` | 吊り金具は見えたが盤に組めない（見終えて 1 面も無いとき。`completed` の代わりに出す） | 戻す |
 | `no_image` | 画像が取れない | 戻す |
 | `lift_refused` | 昇降機が動かない・拒否された | 戻せれば戻す |
-| `camera_too_low` | 必要な高さまで上がれない | 戻す |
+| `camera_too_low` | 必要な高さまで上がれない（天井が近い・上端） | 戻す |
+| `ceiling_unknown` | **版 2。**天井までの距離が分からず上がれない（カメラモジュールが繋がっていない・値が古い） | 戻す |
+| `camera_pose_unknown` | **版 2。**カメラの向きが分からない（ヨーの原点を合わせていない・カメラモジュールが再起動した） | 昇降機は戻す。**カメラのヨーは戻さない**（角度で向けられない）。ピッチは戻す |
 | `canceled` | 取り消された | 戻す |
 | `timeout` | 時間切れ | 戻す |
 | `human_override` | 人の操作で中断 | **戻さない**（手を離すだけ） |
@@ -103,14 +106,16 @@
 
 - **受け付けた依頼には、必ず 1 回だけ出す。**結果を返したあとに出す（結果より先には出さない）。拒否した依頼には出さない。
 - QoS: reliable・transient_local・depth 10（依頼する側が繋ぎ直しても、最近の完了を取りこぼさない）。
-- 後片付けが `cleanup_timeout_s` を過ぎても終わらないときも、そこで手を離し、`lift_restored: false` で出す。
+- **後片付けの上限（版 2）**: `昇降機を戻す距離 ÷ 戻る向きの速さ ＋ cleanup_margin_s`。距離は結果を返す時点の高さと元の高さの差、速さは昇降部から取った値（[-hve.md](DetailedDesign-hve.md) §2.2）。**速さが分からないときは `cleanup_timeout_s`。**この値を結果の `cleanup_limit_s` に入れる。カメラの向きを戻す分は、カメラモジュールとつなぐときに足す（`WP-HVE-02`）。
+- 後片付けが上限を過ぎても終わらないときも、そこで手を離し、`lift_restored: false` で出す。
+- **依頼する側は、`cleanup_limit_s` に自分の余裕を足した時間だけ待つ**ことを勧める（固定の秒数で待つと、昇降が遅い設定のとき足りない）。
 
 ## 4. 生存と状態 `LocatorStatus.msg`
 
 | フィールド | 型 | 意味 |
 | --- | --- | --- |
 | `header` | std_msgs/Header | 出した時刻 |
-| `interface_version` | string | この口の版。今は `"1"`。依頼する側は自分が知っている版と照合する |
+| `interface_version` | string | この口の版。**`"2"`**（2026-11-16。理由 2 つと `cleanup_limit_s` を足した。`WP-LOC-03` が入るまで、実装が出すのは `"1"`）。依頼する側は自分が知っている版と照合する |
 | `phase` | string | `IDLE`（受けられる）／ `RUNNING`（依頼を実行中）／ `CLEANING`（結果を返し、後片付け中） |
 | `goal_id` | unique_identifier_msgs/UUID | 実行中・後片付け中の依頼。`IDLE` のときは全 0 |
 | `last_reject_reason` | string | 最後に拒否した依頼の理由（`busy`／`bad_range`／`bad_distance`／`bad_time_limit`）。無ければ空 |

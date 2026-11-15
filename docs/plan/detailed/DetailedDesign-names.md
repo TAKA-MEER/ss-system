@@ -47,14 +47,14 @@
 
 | 型 | 中身 |
 | --- | --- |
-| `LocatePanels.action` | 依頼: `float32 azimuth_from_rad` / `float32 azimuth_span_rad` / `float32 max_distance_m` / `float32 time_limit_s` ― 結果: `std_msgs/Header header` / `string reason` / `PanelTop[] panels` / `float32[] seen_from_rad` / `float32[] seen_span_rad` ― 途中経過: `string phase` |
+| `LocatePanels.action` | 依頼: `float32 azimuth_from_rad` / `float32 azimuth_span_rad` / `float32 max_distance_m` / `float32 time_limit_s` ― 結果: `std_msgs/Header header` / `string reason` / `PanelTop[] panels` / `float32[] seen_from_rad` / `float32[] seen_span_rad` / `float32 cleanup_limit_s`（版 2） ― 途中経過: `string phase` |
 | `PanelTop.msg` | `float64 x_m` / `float64 y_m` / `float32 top_height_m` / `bool height_measured` / `float64 yaw_rad` / `float32 width_m` / `float32 depth_m` / `float32 pos_std_m` / `float32 yaw_std_deg` / `int32 lugs` / `bool front_known` / `float64 front_yaw_rad` |
 | `CleanupDone.msg` | `std_msgs/Header header` / `unique_identifier_msgs/UUID goal_id` / `string reason` / `bool lift_restored` |
 | `LocatorStatus.msg` | `std_msgs/Header header` / `string interface_version` / `string phase` / `unique_identifier_msgs/UUID goal_id` / `string last_reject_reason` |
 
 | 種類 | 名前 |
 | --- | --- |
-| 終わり方（`reason`） | `completed` / `no_lugs` / `lugs_ungrouped` / `no_image` / `lift_refused` / `camera_too_low` / `canceled` / `timeout` / `human_override` |
+| 終わり方（`reason`） | `completed` / `no_lugs` / `lugs_ungrouped` / `no_image` / `lift_refused` / `camera_too_low` / `ceiling_unknown`（版 2） / `camera_pose_unknown`（版 2） / `canceled` / `timeout` / `human_override` |
 | 状態（`phase`） | `IDLE` / `RUNNING` / `CLEANING` |
 | 途中経過の段（feedback の `phase`） | `RAISING` / `SCANNING` / `ESTIMATING` |
 | 拒否の理由（`last_reject_reason`） | `busy` / `bad_range` / `bad_distance` / `bad_time_limit` |
@@ -64,7 +64,8 @@
 | `max_distance_default_m` | m | 5.0 | [Spec.md](../spec/Spec.md) §1.2「撮り方」（盤まで 5 m 以内） |
 | `top_height_default_m` | m | 2.35 | [Spec.md](../spec/Spec.md) §1.1「高さ」 |
 | `status_period_ms` | ms | 200 | 暫定 |
-| `cleanup_timeout_s` | s | 30 | 暫定（後片付けの上限。過ぎたら手を離して `lift_restored: false`） |
+| `cleanup_timeout_s` | s | 30 | 暫定（**昇降の速さが分からないとき**の後片付けの上限。分かるときは [-locate.md](DetailedDesign-locate.md) §3 の式。過ぎたら手を離して `lift_restored: false`） |
+| `cleanup_margin_s` | s | 10 | **暫定**（版 2。後片付けの上限に足す余裕。`WP-LOC-03`） |
 
 ## 4. ファイル・ディレクトリ
 
@@ -159,3 +160,13 @@
 | `--from-deg`・`--span-deg`・`--max-distance-m`・`--time-limit-s`・`--yes`・`--status`・`--plot`・`--json`・`--wait-s`・`--cleanup-wait-s` | `locate_cli` の引数 | [-tester.md](DetailedDesign-tester.md) §2 |
 | 終了コード 0・2・3・4・5・130 | `locate_cli` | 結果と後片付けの完了を受けた（または依頼を出さずに終わった）・引数の誤り・応えない／版が合わない・依頼できない／拒否・後片付けの完了が届かない・待たずに終わった（[-tester.md](DetailedDesign-tester.md) §3） |
 | `tests/test_locate_view.py`・`tests/test_locate_cli.py` | 試験 | `WP-TEST-01` |
+
+## 9. 口の版 2 で足す名前（`WP-LOC-03`。[-locate.md](DetailedDesign-locate.md)）
+
+| 名前 | 種類 | 中身 |
+| --- | --- | --- |
+| `LiftState.up_speed_m_s`・`LiftState.down_speed_m_s` | `locate_core.py` | 昇降の速さ [m/s]。分からなければ `None`。`HveLift` は昇降部の設定から、`FakeLift` は自分の速さを入れる |
+| `LiftState.stopped_reason` の `ceiling_unknown` | `locate_core.py` | 天井の値が無くて上がれない（[-hve.md](DetailedDesign-hve.md) §4 の 4a） |
+| `CameraState.pose_known` | `locate_core.py` | カメラの向きが読めるか。偽のカメラは `restart()` で false にする。本物は `WP-HVE-02` |
+| `SendResult.cleanup_limit_s` | `locate_core.py` | 結果の `cleanup_limit_s` に入れる値 |
+| `INTERFACE_VERSION` | `locator_node.py` | `"2"` |
