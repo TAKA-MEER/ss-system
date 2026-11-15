@@ -38,7 +38,7 @@ class LiftState:
 
     height_m: float | None  # None は読めない（未着・原点前・古い）
     arrived: bool = False
-    stopped_reason: str = "none"  # none / ceiling / refused / human
+    stopped_reason: str = "none"  # none / ceiling / ceiling_unknown / refused / human
 
 
 @dataclass(frozen=True)
@@ -265,7 +265,7 @@ class LocateCore:
                 reason = event.stopped_reason
                 if reason == "refused":
                     return self._finish("lift_refused", now)
-                if reason == "ceiling":
+                if reason in ("ceiling", "ceiling_unknown"):
                     if event.height_m is None:
                         return self._finish("camera_too_low", now)
                     optical = float(event.height_m) + float(
