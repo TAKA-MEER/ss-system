@@ -200,6 +200,35 @@ def test_node_cleanup_after_result():
         rig.close()
 
 
+def test_node_result_has_cleanup_limit():
+    rig = Rig()
+    try:
+        goal_handle = rig.send_goal()
+        assert goal_handle.accepted
+        result = rig.get_result(goal_handle)
+        assert result.reason == "completed"
+        limit = result.cleanup_limit_s
+        assert 0.0 < limit <= 200.0
+
+        rig.wait_until(lambda: len(rig.cleanups) >= 1, limit, "cleanup_done が来ない")
+        with rig.lock:
+            cleanup_time = rig.cleanups[0][0]
+            result_time = rig.result_times[bytes(goal_handle.goal_id.uuid)]
+        assert cleanup_time - result_time <= limit
+    finally:
+        rig.close()
+
+
+def test_node_interface_version():
+    rig = Rig()
+    try:
+        rig.wait_until(lambda: len(rig.statuses) >= 1, 3.0, "status が来ない")
+        with rig.lock:
+            assert rig.statuses[-1][1].interface_version == "2"
+    finally:
+        rig.close()
+
+
 def test_node_busy_reject():
     rig = Rig()
     try:
@@ -237,7 +266,7 @@ def test_node_status_period():
         with rig.lock:
             samples = list(rig.statuses)
 
-        assert all(message.interface_version == "1" for _, message in samples)
+        assert all(message.interface_version == "2" for _, message in samples)
         assert samples[-1][1].phase == "IDLE"
 
         times = [stamp for stamp, _ in samples]

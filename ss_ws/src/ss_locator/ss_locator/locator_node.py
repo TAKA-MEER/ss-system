@@ -43,7 +43,7 @@ from .locate_core import (
     Tick,
 )
 
-INTERFACE_VERSION = "1"
+INTERFACE_VERSION = "2"
 
 ACTION_NAME = "/ss/locate/panels"
 CLEANUP_TOPIC = "/ss/locate/cleanup_done"
@@ -155,6 +155,8 @@ class LocatorNode(Node):
         self.declare_parameter("top_height_default_m", 2.35)
         self.declare_parameter("status_period_ms", 200)
         self.declare_parameter("cleanup_timeout_s", 30.0)
+        self.declare_parameter("cleanup_margin_s", 10.0)
+        self.declare_parameter("cleanup_limit_max_s", 200.0)
 
         self.declare_parameter("scan_camera_height_m", 3.10)
         self.declare_parameter("min_camera_height_m", 2.95)
@@ -195,6 +197,8 @@ class LocatorNode(Node):
         self.top_height_default_m = float(value("top_height_default_m"))
         self.status_period_ms = int(value("status_period_ms"))
         self.cleanup_timeout_s = float(value("cleanup_timeout_s"))
+        self.cleanup_margin_s = float(value("cleanup_margin_s"))
+        self.cleanup_limit_max_s = float(value("cleanup_limit_max_s"))
 
         self.scan_camera_height_m = float(value("scan_camera_height_m"))
         self.min_camera_height_m = float(value("min_camera_height_m"))
@@ -232,6 +236,8 @@ class LocatorNode(Node):
             "settle_s": self.settle_s,
             "image_timeout_s": self.image_timeout_s,
             "cleanup_timeout_s": self.cleanup_timeout_s,
+            "cleanup_margin_s": self.cleanup_margin_s,
+            "cleanup_limit_max_s": self.cleanup_limit_max_s,
             "camera_height_offset_m": self.camera_height_offset_m,
             "hfov_rad": scan_plan.hfov_from_fx(float(self._camera_K[0, 0])),
         }
@@ -416,6 +422,7 @@ class LocatorNode(Node):
             result.panels.append(panel)
         result.seen_from_rad = [float(v) for v in command.seen_from]
         result.seen_span_rad = [float(v) for v in command.seen_span]
+        result.cleanup_limit_s = float(command.cleanup_limit_s)
         return result
 
     def _send_cleanup_done(self, command):

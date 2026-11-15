@@ -9,6 +9,8 @@ locator_node:
     top_height_default_m: 2.35
     status_period_ms: 200
     cleanup_timeout_s: 30.0
+    cleanup_margin_s: 10.0
+    cleanup_limit_max_s: 200.0
 
     scan_camera_height_m: 3.10
     min_camera_height_m: 2.95
