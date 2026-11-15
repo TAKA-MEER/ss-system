@@ -27,7 +27,7 @@
 
 | 相手 | 出どころ | 状態 |
 | --- | --- | --- |
-| hve-system（昇降部） | hve [DetailedDesign-protocol-modules.md](../../../../hve-system/docs/plan/detailed/DetailedDesign-protocol-modules.md) §1〜§4。本システムは名前 `ss`・`operator: auto`・`ceiling_sensor: false`・`busy_label`「画像認識で操作中」で繋ぐ | 2026-11-05 本システムが確かめた。**hve が実機に入れたと知らせるまで、この名前で実装しない・今の昇降部で上昇させない**。2026-11-15 時点: hve の `main` に入った（実機はまだ。`goto` のファームは hve `WP-LIFT-14` で未着手）。本システムの使い方は [-hve.md](DetailedDesign-hve.md)・§7（案）。**偽の昇降部を相手に実装を始めてよいかは、ユーザーの確認待ち**（[-open.md](DetailedDesign-open.md) §1 の 7） |
+| hve-system（昇降部） | hve [DetailedDesign-protocol-modules.md](../../../../hve-system/docs/plan/detailed/DetailedDesign-protocol-modules.md) §1〜§4。本システムは名前 `ss`・`operator: auto`・`ceiling_sensor: false`・`busy_label`「画像認識で操作中」で繋ぐ | 2026-11-05 本システムが確かめた。**hve が実機に入れたと知らせるまで、この名前で実装しない・今の昇降部で上昇させない**。2026-11-15 時点: hve の `main` に入った（実機はまだ。`goto` のファームは hve `WP-LIFT-14` で未着手）。本システムの使い方は [-hve.md](DetailedDesign-hve.md)・§7（案）。**偽の昇降部を相手に実装する**（2026-11-15 ユーザー決定。[-open.md](DetailedDesign-open.md) §1 の 7）。実機で上昇させないのは今のまま |
 | hve-system（カメラモジュール） | hve がこれから書く（昇降部の口のあと。hve [ImplementationPlan.md](../../../../hve-system/docs/plan/ImplementationPlan.md) §6 の行 8a） | 未着（2026-11-15 時点で未着手） |
 
 ## 2. パッケージ

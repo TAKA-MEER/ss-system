@@ -25,4 +25,4 @@
 ## 3. 段階と作業パケット
 
 [-packets.md](DetailedDesign-packets.md)（**案**）。th-system と同じく**各パケットの終わりに必ず「動くもの」が残る**ように切った。
-`WP-ENV-01` → `WP-EST-01`・`WP-DET-01` → `WP-EST-02` → `WP-LOC-01` は今すぐ着手できる。`WP-HVE-01`（昇降部。2026-11-15 案）は着手の確認待ち、`WP-HVE-02`（カメラモジュール）・`WP-CAL-01` は待ち。本番外の道具 `WP-DEMO-01`（金具認識のリアルタイム表示。[-demo.md](DetailedDesign-demo.md)。2026-11-08 案）は今すぐ着手できる。テスト用の道具 `WP-TEST-01`（依頼を手で試す道具。[-tester.md](DetailedDesign-tester.md)。2026-11-15 案）は、[Spec-tester.md](../spec/Spec-tester.md) §3 の確認のあとに着手できる。状態は [ImplementationPlan.md](../ImplementationPlan.md) §4。
+`WP-ENV-01` → `WP-EST-01`・`WP-DET-01` → `WP-EST-02` → `WP-LOC-01` は今すぐ着手できる。`WP-HVE-01`（昇降部。2026-11-15 案）は偽の昇降部を相手に着手できる、`WP-HVE-02`（カメラモジュール）・`WP-CAL-01` は待ち。本番外の道具 `WP-DEMO-01`（金具認識のリアルタイム表示。[-demo.md](DetailedDesign-demo.md)。2026-11-08 案）は今すぐ着手できる。テスト用の道具 `WP-TEST-01`（依頼を手で試す道具。[-tester.md](DetailedDesign-tester.md)。2026-11-15 案）は、[Spec-tester.md](../spec/Spec-tester.md) §3 の確認のあとに着手できる。状態は [ImplementationPlan.md](../ImplementationPlan.md) §4。

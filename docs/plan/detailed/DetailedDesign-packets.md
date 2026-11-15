@@ -14,7 +14,7 @@
 | `WP-LOC-01` | 依頼の流れ（純関数）と偽の hve | `WP-EST-02`・`WP-DET-01` | できる |
 | `WP-LOC-02` | ノード（ROS 2 の配線） | `WP-LOC-01` | できる |
 | `WP-EST-03` | 位置の大きな誤差の出どころ（調べるだけ） | `WP-EST-02` | できる |
-| `WP-HVE-01` | hve-system の昇降部とつなぐ（2026-11-15 に昇降部の分だけに絞った） | `WP-LOC-02` | **ユーザーの確認待ち**（偽の昇降部を相手に作ることはできる。[-open.md](DetailedDesign-open.md) §1 の 7） |
+| `WP-HVE-01` | hve-system の昇降部とつなぐ（2026-11-15 に昇降部の分だけに絞った） | `WP-LOC-02` | できる（偽の昇降部が相手。2026-11-15 ユーザー決定。[-open.md](DetailedDesign-open.md) §1 の 7） |
 | `WP-HVE-02` | hve-system のカメラモジュールとつなぐ | `WP-HVE-01` | **待ち**（hve の口。[-hve.md](DetailedDesign-hve.md) §6） |
 | `WP-CAL-01` | カメラの内部パラメータの校正 | `WP-ENV-01` | **待ち**（hve のカメラで撮ったチェッカーボードの画像） |
 | `WP-DEMO-01` | 金具認識のリアルタイム表示（本番外の道具） | `WP-DET-01` | できる |
@@ -196,7 +196,7 @@ ros2 topic echo /ss/locate/cleanup_done
 
 ## `WP-HVE-01` hve-system の昇降部とつなぐ
 
-**状態: 2026-11-15 案。着手はユーザーの確認待ち**（[-names.md](DetailedDesign-names.md) §1 の「hve が実機に入れたと知らせるまで実装しない」を、偽の昇降部が相手なら解いてよいか）。**このパケットでは実機の昇降部に繋がない。**
+**状態: 2026-11-15 案。同日ユーザーが着手を決めた**（hve と話し合って接続部を作る）。**このパケットでは実機の昇降部に繋がない。**
 
 **読む節**: [-hve.md](DetailedDesign-hve.md) §0〜§5、[-core.md](DetailedDesign-core.md) §5、[-names.md](DetailedDesign-names.md) §5・§7。相手の形は hve [DetailedDesign-protocol-modules.md](../../../../hve-system/docs/plan/detailed/DetailedDesign-protocol-modules.md) §1〜§3 と hve [DetailedDesign-protocol.md](../../../../hve-system/docs/plan/detailed/DetailedDesign-protocol.md) §2.2（`state` の今の欄）。**hve のリポジトリは読むだけで、書き換えない。**
 

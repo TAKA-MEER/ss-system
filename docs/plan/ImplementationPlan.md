@@ -247,7 +247,7 @@ th-system では 14 回マージしたのに計画書に反映されたのは 1 
 | `WP-LOC-01` | 依頼の流れ（純関数）と偽の hve | **済み**（2026-11-06 マージ。opencode が無料枠切れで変異チェック (1) を入れたまま止まっていたのを、実装管理担当がバックアップから戻した。試験 40 件・変異 4 件を実装管理担当が回した） |
 | `WP-LOC-02` | ノード（ROS 2 の配線） | **済み**（2026-11-07 マージ。opencode・差し戻し 1 回（`cleanup_done` を結果を待たずに出す変異が素通りした → 後片付けがすぐ終わる場合の試験を足させ、`cleanup_done` を出すまでは `CLEANING`・`busy` にさせた）。試験 46 件・変異 3 件を実装管理担当が回した。偽の hve で `ros2 action send_goal` から `completed`・`cleanup_done` まで手でも確認。偽の昇降機は高さ 0 から秒速 0.2 m で上がるので、既定のままだと 1 回に約 40 s かかる） |
 | `WP-EST-03` | 位置の大きな誤差の出どころ（調べるだけ） | **済み**（2026-11-05 マージ。opencode。実装管理担当が再実行し、文書の表が再現することを確認。2σ 超えの 121 盤のうち 120 盤が金具 2 個の盤で、その誤差の中央値は 0.07 m） |
-| `WP-HVE-01` | hve-system の昇降部とつなぐ | **設計の案**（2026-11-15。[detailed/DetailedDesign-hve.md](detailed/DetailedDesign-hve.md)）。着手はユーザーの確認待ち。実機で上昇させるのは hve `WP-LIFT-14` と実機への書き込みのあと |
+| `WP-HVE-01` | hve-system の昇降部とつなぐ | **設計の案**（2026-11-15。[detailed/DetailedDesign-hve.md](detailed/DetailedDesign-hve.md)）。**実装中**（2026-11-15 ユーザーが着手を決めた。ブランチ `feat/wp-hve-01-lift`。相手は hve の偽の昇降部）。実機で上昇させるのは hve `WP-LIFT-14` と実機への書き込みのあと |
 | `WP-TEST-01` | 依頼を手で試す道具（テスト用の端末のコマンド。[Spec-tester.md](spec/Spec-tester.md)） | **設計の案**（2026-11-15。[detailed/DetailedDesign-tester.md](detailed/DetailedDesign-tester.md)）。着手は spec の細部（`SS-A10`）の確認のあと |
 | `WP-HVE-02` | hve-system のカメラモジュールとつなぐ | 待ち（hve の口。hve の計画書 §6 の行 8a は未着手） |
 | `WP-CAL-01` | カメラの内部パラメータの校正 | 待ち（hve のカメラの画像） |
@@ -265,10 +265,10 @@ th-system では 14 回マージしたのに計画書に反映されたのは 1 
 
 | # | 作業 | 状態 |
 | --- | --- | --- |
-| 1 | **`WP-HVE-01`（昇降部とつなぐ）を、hve の偽の昇降部を相手に実装してよいかを決める**（[detailed/DetailedDesign-open.md](detailed/DetailedDesign-open.md) §1 の 7）。よければ発注する | ユーザーの確認待ち |
+| 1 | **`WP-HVE-01`（昇降部とつなぐ）を、hve の偽の昇降部を相手に実装してよいかを決める**（[detailed/DetailedDesign-open.md](detailed/DetailedDesign-open.md) §1 の 7）。よければ発注する | **発注した**（2026-11-15 ユーザー決定。hve への相談も送付済みで、答え待ち） |
 | 1a | **依頼を手で試す道具の細部（[Spec-tester.md](spec/Spec-tester.md) §3。`SS-A10`）を確かめる。**よければ `WP-TEST-01` を発注する（偽の hve が相手なので、今すぐ作れる） | ユーザーの確認待ち |
 | 2 | **fk-system へ未送付の 2 件を送る**（対角の吊り金具 2 個だけの盤は向きの標準偏差 90°・後片付けでカメラの向きも戻す。[Spec-open.md](spec/Spec-open.md) §1.2）。あわせて、人でない操作元に取って代わられたときの理由（[detailed/DetailedDesign-open.md](detailed/DetailedDesign-open.md) §1 の 8）を相談する | 未送付 |
-| 3 | **hve-system へ `SS-A7` を送る**（デモで静止画を繰り返し要求してよいか） | 未送付 |
+| 3 | ~~hve-system へ `SS-A7` を送る~~（デモで静止画を繰り返し要求してよいか） | 送付済み（2026-11-15。答え待ち） |
 | 4 | `WP-HVE-02`（カメラモジュールとつなぐ）。hve が口を書いたら確かめ、詳細設計を書く | 待ち（hve） |
 | 5 | `WP-CAL-01`（内部パラメータの校正） | 待ち（hve のカメラの画像） |
 | 6 | 実機で測る・決める値（カメラの取付の位置・`scan_pitch_down_deg`・昇降の速さ・`cleanup_timeout_s`。[detailed/DetailedDesign-open.md](detailed/DetailedDesign-open.md) §1 の 6・9・10） | 待ち（実機） |
