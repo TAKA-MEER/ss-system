@@ -134,8 +134,21 @@ class FakeCamera:
         self._arrived = False
         self._pending = False
 
-    def capture(self):
-        """向けたヨーに最も近い視点の `K`・`dist`・`T`・視点の番号を返す。失敗なら `None`。"""
+    def release(self):
+        """持ち主を離す（偽は何もしない）。"""
+
+    def capture(self, on_done=None):
+        """向けたヨーに最も近い視点の `K`・`dist`・`T`・視点の番号を返す。失敗なら `None`。
+
+        `on_done` を渡すと、その場で `on_done("use", 結果)`／`on_done("fail", None)` を呼ぶ
+        （本物の `HveCamera.capture` と同じ呼び方にそろえるため）。
+        """
+        result = self._capture()
+        if on_done is not None:
+            on_done("fail" if result is None else "use", result)
+        return result
+
+    def _capture(self):
         if self.fail:
             return None
         view = min(self.views, key=lambda v: abs(_angle_diff(_view_yaw_rad(v), self.yaw_rad)))
