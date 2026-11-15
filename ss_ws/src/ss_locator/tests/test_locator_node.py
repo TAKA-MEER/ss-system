@@ -414,3 +414,30 @@ def test_node_uses_hve_lift():
     finally:
         rig.close()
         server.stop()
+
+
+def test_node_camera_taken_over():
+    # 偽のカメラを取って代わられた状態にすると、毎周期渡す状態から human_override になる
+    # （CameraPoint の直後に渡す state() では伝わらない。昇降機を上げている間に入れる）
+    rig = Rig()
+    try:
+        goal_handle = rig.send_goal()
+        assert goal_handle.accepted
+        rig.wait_until(
+            lambda: any(message.phase == "RUNNING" for _, message in rig.statuses),
+            5.0,
+            "RUNNING にならない",
+        )
+        with rig.node._lock:
+            rig.node._camera.take_over()
+
+        result = rig.get_result(goal_handle)
+        assert result.reason == "human_override"
+
+        rig.wait_until(lambda: len(rig.cleanups) >= 1, 10.0, "cleanup_done が来ない")
+        with rig.lock:
+            cleanup = rig.cleanups[0][1]
+        assert cleanup.reason == "human_override"
+        assert cleanup.lift_restored is False
+    finally:
+        rig.close()
