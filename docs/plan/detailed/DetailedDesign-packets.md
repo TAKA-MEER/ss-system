@@ -20,7 +20,7 @@
 | `WP-DEMO-01` | 金具認識のリアルタイム表示（本番外の道具） | `WP-DET-01` | できる |
 | `WP-DEMO-02` | 金具認識のリアルタイム表示の起動スクリプト | `WP-DEMO-01` | できる |
 | `WP-DEMO-03` | 金具認識のリアルタイム表示に速さと入力の解像度を出す | `WP-DEMO-01` | できる |
-| `WP-LOC-03` | 口の版 2（理由 2 つ・後片付けの上限・`cleanup_limit_s`） | `WP-HVE-01` | **fk-system の確認待ち**（2026-11-16 ユーザー決定の分） |
+| `WP-LOC-03` | 口の版 2（理由 2 つ・後片付けの上限・`cleanup_limit_s`） | `WP-HVE-01` | できる（2026-11-16 fk-system が確かめた） |
 | `WP-TEST-01` | 依頼を手で試す道具（テスト用の端末のコマンド） | `WP-LOC-02` | **ユーザーの確認待ち**（[Spec-tester.md](../spec/Spec-tester.md) §3） |
 
 先行試作は `../../lifting-lug-pose` の `9265d2d`。**試作のリポジトリは読むだけで、書き換えない。**
@@ -411,14 +411,14 @@ ros2 run ss_locator locate_cli --plot .briefs/tmp/top.png --json .briefs/tmp/res
 
 ## `WP-LOC-03` 口の版 2
 
-**状態: 2026-11-16 案。fk-system の確認待ち**（口が変わるので、fk-system が確かめてから発注する）。
+**状態: 2026-11-16 案。同日 fk-system が確かめた**（案のとおり）。**マージしたら fk-system に知らせる**（fk はそのコミットの `ss_msgs` を取り込んで照合する）。
 
 **読む節**: [-locate.md](DetailedDesign-locate.md) §2.2・§2.4・§3・§4（「版 2」と書いた所）、[-core.md](DetailedDesign-core.md) §5、[-hve.md](DetailedDesign-hve.md) §4、[-names.md](DetailedDesign-names.md) §3・§9。
 
 | やること | 中身 |
 | --- | --- |
 | 型 | `LocatePanels.action` の結果に `float32 cleanup_limit_s` を足す |
-| `locate_core.py` | 理由 `ceiling_unknown`・`camera_pose_unknown`（受け付けのときと途中の両方。**再起動で撮り直すのをやめる**）。後片付けの上限を距離 ÷ 速さ ＋ `cleanup_margin_s` にし、`SendResult.cleanup_limit_s` に入れる。速さが `None` なら `cleanup_timeout_s` |
+| `locate_core.py` | 理由 `ceiling_unknown`・`camera_pose_unknown`（受け付けのときと途中の両方。**再起動で撮り直すのをやめる**）。後片付けの上限を距離 ÷ 速さ ＋ `cleanup_margin_s` にし、`SendResult.cleanup_limit_s` に入れる。速さが `None`・0 以下なら `cleanup_timeout_s`。`cleanup_limit_max_s` を超えたら切り詰める |
 | `hve_lift_core.py`・`fakes.py` | `LiftState` に速さを入れる。`FakeCamera.restart()` は `pose_known` を false にする |
 | `locator_node.py`・`config/locator.yaml` | `cleanup_limit_s` を結果に入れる。`INTERFACE_VERSION` を `"2"`。`cleanup_margin_s` |
 
@@ -428,7 +428,8 @@ ros2 run ss_locator locate_cli --plot .briefs/tmp/top.png --json .briefs/tmp/res
 | `test_core_pose_unknown_at_accept` | 受け付けのとき向きが読めなければ、`LiftGoto`・`CameraPoint` を出さずに `camera_pose_unknown` |
 | `test_core_restart_ends_request` | 走査の途中で再起動すると、撮り直さずに `camera_pose_unknown` で終わり、それまでの盤と見た範囲を返す。**後片付けで `CameraPoint` のヨーを戻す命令を出さない**。昇降機は戻す（今の `test_core_restart_discards` を置き換える） |
 | `test_core_cleanup_limit_from_speed` | 高さの差 1.2 m・下降 0.03 m/s・余裕 10 s で `cleanup_limit_s` が 50。その時間までは待ち、過ぎたら手を離して `lift_restored: false` |
-| `test_core_cleanup_limit_fallback` | 速さが `None` なら `cleanup_limit_s` は `cleanup_timeout_s` |
+| `test_core_cleanup_limit_fallback` | 速さが `None`・0 のとき `cleanup_limit_s` は `cleanup_timeout_s` |
+| `test_core_cleanup_limit_capped` | 高さの差 1.8 m・下降 0.005 m/s（370 s になる）で、`cleanup_limit_s` が `cleanup_limit_max_s`。その時間を過ぎたら手を離して `lift_restored: false` |
 | `test_core_cleanup_limit_zero_when_no_restore` | `human_override` の結果の `cleanup_limit_s` は 0 |
 | `test_node_result_has_cleanup_limit` | ノードの結果に `cleanup_limit_s` が入り、`cleanup_done` がその時間のうちに来る |
 | `test_node_interface_version` | `status` の `interface_version` が `"2"` |

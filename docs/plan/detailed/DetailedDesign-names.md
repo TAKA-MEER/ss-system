@@ -66,6 +66,7 @@
 | `status_period_ms` | ms | 200 | 暫定 |
 | `cleanup_timeout_s` | s | 30 | 暫定（**昇降の速さが分からないとき**の後片付けの上限。分かるときは [-locate.md](DetailedDesign-locate.md) §3 の式。過ぎたら手を離して `lift_restored: false`） |
 | `cleanup_margin_s` | s | 10 | **暫定**（版 2。後片付けの上限に足す余裕。`WP-LOC-03`） |
+| `cleanup_limit_max_s` | s | 200 | **暫定（逆算）**（版 2。`cleanup_limit_s` の取りうる最大。昇降の全行程 1.8 m を 10 mm/s で戻すと 180 s、余裕を足して 190 s。既定の設定（30 mm/s）なら 1.35 m で約 55 s。実機の速さが分かったら見直す。`WP-LOC-03`） |
 
 ## 4. ファイル・ディレクトリ
 
