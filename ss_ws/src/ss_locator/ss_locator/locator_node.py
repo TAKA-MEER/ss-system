@@ -164,6 +164,7 @@ class LocatorNode(Node):
         self.declare_parameter("scan_overlap_ratio", 0.1)
         self.declare_parameter("settle_s", 0.5)
         self.declare_parameter("image_timeout_s", 5.0)
+        self.declare_parameter("aim_timeout_s", 60.0)
 
         self.declare_parameter("camera_mount_x_m", 0.0)
         self.declare_parameter("camera_mount_y_m", 0.0)
@@ -206,6 +207,7 @@ class LocatorNode(Node):
         self.scan_overlap_ratio = float(value("scan_overlap_ratio"))
         self.settle_s = float(value("settle_s"))
         self.image_timeout_s = float(value("image_timeout_s"))
+        self.aim_timeout_s = float(value("aim_timeout_s"))
 
         self.camera_mount_x_m = float(value("camera_mount_x_m"))
         self.camera_mount_y_m = float(value("camera_mount_y_m"))
@@ -235,6 +237,7 @@ class LocatorNode(Node):
             "scan_overlap_ratio": self.scan_overlap_ratio,
             "settle_s": self.settle_s,
             "image_timeout_s": self.image_timeout_s,
+            "aim_timeout_s": self.aim_timeout_s,
             "cleanup_timeout_s": self.cleanup_timeout_s,
             "cleanup_margin_s": self.cleanup_margin_s,
             "cleanup_limit_max_s": self.cleanup_limit_max_s,
@@ -306,6 +309,10 @@ class LocatorNode(Node):
             else:
                 self._events.append(Tick())
             self._status_published_this_tick = False
+            self._drain(now)
+            # カメラの状態（着いた・取って代わられた・向けられない）は昇降機の分を
+            # 処理したあとで渡す（そのとき出した命令より前の状態を渡さないため）
+            self._events.append(self._camera.state())
             self._drain(now)
             self._flush_cleanup(now)
             if not self._status_published_this_tick:

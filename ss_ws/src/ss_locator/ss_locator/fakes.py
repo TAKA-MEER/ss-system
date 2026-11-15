@@ -99,22 +99,40 @@ class FakeLift:
 
 
 class FakeCamera:
-    """材料の 1 シーンを持つ偽のカメラ。向けたヨーに最も近い視点を返す。"""
+    """材料の 1 シーンを持つ偽のカメラ。向けたヨーに最も近い視点を返す。
 
-    def __init__(self, fixture, scene=0, fail=False):
+    向けた次の `state()` で `arrived` を返す（向け直すまで残る）。
+    """
+
+    def __init__(self, fixture, scene=0, fail=False, fail_aim=False):
         data = _load_fixture(fixture)
         self.views = data["scenes"][int(scene)]["views"]
         self.fail = bool(fail)
+        self.fail_aim = bool(fail_aim)  # 向けられない（試験用）
         self.yaw_rad = 0.0
         self.pitch_down_rad = 0.0
         self.restarted = False
         self.pose_known = True
+        self._arrived = False
+        self._pending = False
+        self._taken_over = False
+        self._failed = False
 
     def point(self, yaw_rad, pitch_down_rad):
         if yaw_rad is not None:
             self.yaw_rad = float(yaw_rad)
         self.pitch_down_rad = float(pitch_down_rad)
         self.restarted = False
+        self._taken_over = False
+        self._arrived = False
+        self._pending = not self.fail_aim
+        self._failed = self.fail_aim
+
+    def take_over(self):
+        """人に取って代わられた（試験用）。次に向けるまで残る。"""
+        self._taken_over = True
+        self._arrived = False
+        self._pending = False
 
     def capture(self):
         """向けたヨーに最も近い視点の `K`・`dist`・`T`・視点の番号を返す。失敗なら `None`。"""
@@ -136,7 +154,18 @@ class FakeCamera:
         self.pitch_down_rad = 0.0
 
     def state(self):
-        return CameraState(self.yaw_rad, self.pitch_down_rad, self.restarted, self.pose_known)
+        if self._pending:
+            self._arrived = True
+            self._pending = False
+        return CameraState(
+            self.yaw_rad,
+            self.pitch_down_rad,
+            self.restarted,
+            self.pose_known,
+            self._arrived,
+            self._taken_over,
+            self._failed,
+        )
 
 
 class FakeDetector:
