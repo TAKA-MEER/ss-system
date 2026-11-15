@@ -31,6 +31,5 @@ locator_node:
 
     hve_lift: false
     lift_host: hve-lift.local
-    lift_speed_mm_s: 40
     lift_cmd_period_ms: 100
     lift_state_timeout_ms: 600

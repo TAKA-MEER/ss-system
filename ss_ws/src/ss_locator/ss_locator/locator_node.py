@@ -94,7 +94,6 @@ class LocatorNode(Node):
         self._lift = (
             HveLift(
                 self.lift_host,
-                speed_mm_s=self.lift_speed_mm_s,
                 cmd_period_ms=self.lift_cmd_period_ms,
                 state_timeout_ms=self.lift_state_timeout_ms,
             )
@@ -180,7 +179,6 @@ class LocatorNode(Node):
 
         self.declare_parameter("hve_lift", False)
         self.declare_parameter("lift_host", "hve-lift.local")
-        self.declare_parameter("lift_speed_mm_s", 40)
         self.declare_parameter("lift_cmd_period_ms", 100)
         self.declare_parameter("lift_state_timeout_ms", 600)
 
@@ -218,7 +216,6 @@ class LocatorNode(Node):
 
         self.hve_lift = bool(value("hve_lift"))
         self.lift_host = str(value("lift_host"))
-        self.lift_speed_mm_s = int(value("lift_speed_mm_s"))
         self.lift_cmd_period_ms = int(value("lift_cmd_period_ms"))
         self.lift_state_timeout_ms = int(value("lift_state_timeout_ms"))
 
