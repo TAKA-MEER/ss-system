@@ -51,6 +51,7 @@ ss-system の**完成形の正本**。
 | **[Spec.md](Spec.md)** | **本体。**対象・用語・目標・設計思想・全体構成・目次 | 初版 |
 | **[Spec-open.md](Spec-open.md)** | **関連システムとの関係・未確定事項・決定の記録** | 初版 |
 | [Spec-demo.md](Spec-demo.md) | 金具認識のリアルタイム表示（実現可能性を示す本番外の道具） | 初版（2026-11-08） |
+| [Spec-tester.md](Spec-tester.md) | 依頼を手で試す道具（テスト用に、人が端末から依頼を出して結果を見る。本番外） | 初版（2026-11-15。細部は確認待ち） |
 
 **領域ごとの詳細ファイル（`Spec-<領域>.md`）は、書く内容ができた時点で足す。**
 th-system・hve-system では `Spec-safety.md`（安全）・`Spec-ops.md`／`Spec-ui.md`（操作・画面）・`Spec-params.md`（パラメータ）に分けている。

@@ -25,6 +25,7 @@
 | --- | --- |
 | `SS-A1`・`SS-A2` | 依頼する側との口は [-locate.md](DetailedDesign-locate.md)（案）、中の構成は [-core.md](DetailedDesign-core.md)（案）。ヨーの測り方（hve `H-A11`）が決まったら [-core.md](DetailedDesign-core.md) §2・§6 を直す。hve-system とつなぐ部分は [-hve.md](DetailedDesign-hve.md)（昇降部は 2026-11-15 案。カメラモジュールは待ち） |
 | `SS-V3` | `WP-DET-01` で測り、結果を spec に戻す |
+| `SS-A10` | 依頼を手で試す道具の細部（[Spec-tester.md](../spec/Spec-tester.md) §3）がユーザーの確認待ち。変わったら [-tester.md](DetailedDesign-tester.md) と `WP-TEST-01` を直す |
 | `SS-A7` | 金具認識のリアルタイム表示で hve-system の静止画を入力にすること。hve-system の答えとカメラモジュールの口を待つ（[-demo.md](DetailedDesign-demo.md) §0） |
 
 ## 3. レビュー指摘管理表

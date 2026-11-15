@@ -41,6 +41,7 @@
 | [DetailedDesign-packets.md](DetailedDesign-packets.md) | 作業パケットと受け入れ条件 | 2026-11-05 案 |
 | [DetailedDesign-demo.md](DetailedDesign-demo.md) | 金具認識のリアルタイム表示（本番外の道具。[Spec-demo.md](../spec/Spec-demo.md)） | 2026-11-08 案 |
 | [DetailedDesign-hve.md](DetailedDesign-hve.md) | hve-system とつなぐ部分（昇降部の使い方・止めた理由の対応。カメラモジュールは待ち） | 2026-11-15 案（昇降部だけ） |
+| [DetailedDesign-tester.md](DetailedDesign-tester.md) | 依頼を手で試す道具（テスト用の端末のコマンド。[Spec-tester.md](../spec/Spec-tester.md)） | 2026-11-15 案 |
 
 カメラモジュールとつなぐ部分は、hve の口が決まってから足す。
 

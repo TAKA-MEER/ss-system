@@ -20,6 +20,7 @@
 | `WP-DEMO-01` | 金具認識のリアルタイム表示（本番外の道具） | `WP-DET-01` | できる |
 | `WP-DEMO-02` | 金具認識のリアルタイム表示の起動スクリプト | `WP-DEMO-01` | できる |
 | `WP-DEMO-03` | 金具認識のリアルタイム表示に速さと入力の解像度を出す | `WP-DEMO-01` | できる |
+| `WP-TEST-01` | 依頼を手で試す道具（テスト用の端末のコマンド） | `WP-LOC-02` | **ユーザーの確認待ち**（[Spec-tester.md](../spec/Spec-tester.md) §3） |
 
 先行試作は `../../lifting-lug-pose` の `9265d2d`。**試作のリポジトリは読むだけで、書き換えない。**
 
@@ -353,3 +354,52 @@ scripts/demo.sh --source <金具の写っていない画像フォルダ> --headl
 | `test_run_demo_reports_rates` | 偽の時計（推定のたびに 0.25 秒進む）と、推定のたびに入力へ 3 コマ足す偽の検出器で、十分回したあとの結果の `fps` が 4.0（±0.5）、`in_fps` が 12.0（±1） |
 | `test_run_demo_reports_src_size` | 640×480 のコマで `src_size` が (640, 480)、左上の行に `src: 640x480` がある（`draw_lugs` に渡った `info` で確かめる） |
 | `test_folder_has_no_input_rate` | フォルダの入力で `in_fps` が `None`、左上の行が `in fps: -` |
+
+## `WP-TEST-01` 依頼を手で試す道具
+
+**状態: 2026-11-15 案。着手は [Spec-tester.md](../spec/Spec-tester.md) §3 の確認のあと。**
+
+**読む節**: [-tester.md](DetailedDesign-tester.md) 全部、[-locate.md](DetailedDesign-locate.md) §1〜§4、[-names.md](DetailedDesign-names.md) §3・§8。
+
+| やること | 中身 |
+| --- | --- |
+| 純関数 | `locate_view.py`（[-tester.md](DetailedDesign-tester.md) §2・§4〜§6） |
+| つなぐ | `locate_cli.py`（§3）と、`setup.py` の `locate_cli` |
+| 変えないもの | `locator_node.py`・`locate_core.py`・`ss_msgs`。**`locate_cli.py` は `locator_node`・`locate_core` を読み込まない**（口だけを使う） |
+| 試験 | `tests/test_locate_view.py`（ROS 2 なし）・`tests/test_locate_cli.py`（`use_fakes` の `locator_node` を同じプロセスで起こして相手にする）。**確認の入力と Ctrl+C は、`run_cli` に渡す関数・印で差し替える**（端末と実際のシグナルに頼らない） |
+
+**受け入れ条件**:
+
+```bash
+docker run --rm -v "$PWD":/ws ss-system:dev bash scripts/test.sh          # 0 で終わる（今までの試験も通る）
+# 実装管理担当が手で。1 つ目の端末:
+ros2 run ss_locator locator_node --ros-args -p use_fakes:=true
+# 2 つ目の端末（同じコンテナ）:
+ros2 run ss_locator locate_cli --status                                   # 状態が 1 行出て 0
+ros2 run ss_locator locate_cli --plot .briefs/tmp/top.png --json .briefs/tmp/result.json
+                                                                          # 確認に y → 段・表・後片付けの完了が出て 0。図と JSON ができる
+```
+
+| 試験 | 確かめること |
+| --- | --- |
+| `test_goal_from_args_defaults` | 引数なしで開始 −π・幅 2π・距離 0・制限時間 120 |
+| `test_goal_from_args_degrees` | `--from-deg 170 --span-deg 40` で開始が rad の 170°・幅が rad の 40°。`--from-deg 270` は −90° に直る |
+| `test_goal_from_args_rejects` | 幅 0・幅 361・距離 −1・制限時間 0 のそれぞれで誤りになる |
+| `test_format_result_table` | 盤 2 面の結果で、行が 2 つ、方位・距離が中心から計算した値、角度が度、`reason` の名前が出る |
+| `test_format_result_unknown_yaw` | `yaw_std_deg` が 90 の盤の向きσ が `不明`。`front_known` が false の正面は `-` |
+| `test_format_result_empty` | 盤 0 面で、表の代わりに理由の説明と `reason` の名前が出る。知らない `reason` でも落ちない |
+| `test_format_seen_ranges` | 見た範囲が 2 つのとき両方出る。無ければ `なし` |
+| `test_draw_top_view_axes` | 機体の前 3 m の盤だけを描くと、画像の上半分の中央の列の近くの画素が変わり、下半分は盤なしの図と同じ。**左 3 m の盤は左半分**（左右を逆にする変異を落とす） |
+| `test_draw_top_view_base_edge` | 基準の辺の中点の画素が、反対の辺の中点より太く描かれている（盤を 180° 回すと入れ替わる） |
+| `test_result_to_dict_keeps_values` | 書き出した盤の値が、渡した値と同じ（丸めない） |
+| `test_cli_completes` | 偽の hve のノードを相手に `--yes` で回すと、段 → 表 → 後片付けの完了の順に出て 0。**後片付けの完了の行は表より後** |
+| `test_cli_confirm_no_sends_nothing` | 確認に `n` と答えると 0 で終わり、ノードの `phase` が `IDLE` のまま（依頼が届いていない） |
+| `test_cli_cancel_waits_cleanup` | 途中で取り消しの印を立てると、結果の `reason` が `canceled` で、**後片付けの完了を出してから** 0 で終わる |
+| `test_cli_second_interrupt` | 取り消しの印を 2 回立てると、待たずに 130 で終わる |
+| `test_cli_no_server` | ノードが無いと、`--wait-s` のあと 3 で終わり、依頼を出さない |
+| `test_cli_busy` | 別の依頼の最中に起こすと 4 で終わる |
+| `test_cli_status_only` | `--status` で状態を出して 0。依頼を出さない |
+| `test_cli_ignores_other_cleanup` | 依頼の ID が違う `cleanup_done` が先に届いても、それで終わらない |
+| `test_cli_writes_plot_and_json` | `--plot`・`--json` のファイルができ、PNG が 800×800、JSON の `reason` が結果と同じ。付けなければファイルができない |
+
+**変異チェック（実装管理担当が自分で回す）**: (1) `locate_cli.py` で確認に `n` でも依頼を送る、(2) 取り消したあと後片付けの完了を待たずに終わる、(3) `cleanup_done` の依頼の ID を照らさない、(4) `locate_view.py` で度を rad に直さない、(5) 図の左右を逆にする、のそれぞれで試験が落ちること。

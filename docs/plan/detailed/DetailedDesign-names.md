@@ -144,3 +144,16 @@
 | `lift_speed_mm_s` | mm/s | 40 | **暫定**（hve の文書の例の値。昇降部の設定の範囲に入る値を実機で決める。[-open.md](DetailedDesign-open.md) §1 の 9） |
 | `lift_cmd_period_ms` | ms | 100 | 先方（hve が勧める間隔。2026-11-05 に hve へ答えた値） |
 | `lift_state_timeout_ms` | ms | 600 | 2026-11-05 に hve へ答えた値（`state` の配信は hve の仮値で 100 ms ごと） |
+
+## 8. 依頼を手で試す道具（[-tester.md](DetailedDesign-tester.md)。案）
+
+テスト用・本番外。`locator_node` からは読み込まない。パラメータは新しく作らない（値は引数で受ける）。
+
+| 名前 | 種類 | 中身 |
+| --- | --- | --- |
+| `ss_locator/locate_view.py` | ファイル（純関数） | `goal_from_args`・`format_status`・`format_result`・`format_cleanup`・`draw_top_view`・`result_to_dict` |
+| `ss_locator/locate_cli.py` | ファイル（つなぐ） | `run_cli`・`main` |
+| `locate_cli` | 実行ファイル（`setup.py` の `console_scripts`） | `ss_locator.locate_cli:main` |
+| `--from-deg`・`--span-deg`・`--max-distance-m`・`--time-limit-s`・`--yes`・`--status`・`--plot`・`--json`・`--wait-s`・`--cleanup-wait-s` | `locate_cli` の引数 | [-tester.md](DetailedDesign-tester.md) §2 |
+| 終了コード 0・2・3・4・5・130 | `locate_cli` | 結果と後片付けの完了を受けた（または依頼を出さずに終わった）・引数の誤り・応えない／版が合わない・依頼できない／拒否・後片付けの完了が届かない・待たずに終わった（[-tester.md](DetailedDesign-tester.md) §3） |
+| `tests/test_locate_view.py`・`tests/test_locate_cli.py` | 試験 | `WP-TEST-01` |
