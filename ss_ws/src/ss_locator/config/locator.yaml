@@ -18,6 +18,7 @@ locator_node:
     scan_overlap_ratio: 0.1
     settle_s: 0.5
     image_timeout_s: 5.0
+    aim_timeout_s: 60.0
 
     camera_mount_x_m: 0.0
     camera_mount_y_m: 0.0
