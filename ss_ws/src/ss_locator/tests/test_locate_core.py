@@ -9,11 +9,13 @@ from ss_locator import assemble, scan_plan
 from ss_locator.fakes import FakeCamera, FakeDetector, FakeLift
 from ss_locator.locate_core import (
     CameraPoint,
+    CameraRelease,
     CameraState,
     Cancel,
     FrameDone,
     GoalRequest,
     LiftGoto,
+    LiftRelease,
     LiftState,
     LocateCore,
     RequestFrame,
@@ -46,6 +48,7 @@ def make_params(**overrides):
         "scan_overlap_ratio": 0.1,
         "settle_s": 0.5,
         "image_timeout_s": 5.0,
+        "aim_timeout_s": 60.0,
         "cleanup_timeout_s": 30.0,
         "cleanup_margin_s": 10.0,
         "cleanup_limit_max_s": 200.0,
@@ -151,6 +154,8 @@ class Rig:
             self.post(FrameDone(self.camera.yaw_rad, obs, True))
         elif isinstance(command, CameraPoint):
             self.camera.point(command.yaw_rad, command.pitch_down_rad)
+            # 偽のカメラは向けた次の state() で着く。ノードと同じく、すぐ受け取る
+            self.post(self.camera.state())
 
     def start_scan(self):
         self.advance(0.0)  # 昇降部へ
@@ -715,3 +720,227 @@ def test_core_cleanup_limit_zero_when_no_restore():
     result = rig.results()[0]
     assert result.reason == "human_override"
     assert result.cleanup_limit_s == 0.0
+
+
+# ---------------------------------------------------------------- カメラの着いた・取って代わられた（WP-HVE-02）
+class Drive:
+    """出来事を 1 つずつ手で渡して `LocateCore` の命令を見る（偽のカメラを使わない）。"""
+
+    def __init__(self, origin_height=1.9, origin_yaw=0.0, lift_speed=10.0,
+                 scanning=True, **params):
+        self.params = make_params(**params)
+        self.core = LocateCore(self.params)
+        self.commands = []
+        self.step(LiftState(origin_height, False, "none", lift_speed, lift_speed), 0.0)
+        self.step(CameraState(origin_yaw, 0.1), 0.0)
+        assert self.core.accept(goal(), 0.0) is None
+        self.step(Tick(), 0.0)  # 昇降機へ
+        if not scanning:
+            assert self.core.stage == LocateCore.RAISING
+            return
+        target = self.params["scan_camera_height_m"]
+        self.step(LiftState(target, True, "none", lift_speed, lift_speed), 1.0)
+        assert self.core.stage == LocateCore.SCANNING
+        assert isinstance(self.commands[-1], CameraPoint)
+
+    def step(self, event, now):
+        commands = self.core.step(event, now)
+        self.commands.extend(commands)
+        return commands
+
+    def camera(self, now, **kwargs):
+        values = {"yaw_rad": 0.0, "pitch_down_rad": 0.1}
+        values.update(kwargs)
+        return self.step(CameraState(**values), now)
+
+    def result(self):
+        results = [c for c in self.commands if isinstance(c, SendResult)]
+        assert len(results) == 1
+        return results[0]
+
+    def cleanup_dones(self):
+        return [c for c in self.commands if isinstance(c, SendCleanupDone)]
+
+
+def has(commands, kind):
+    return any(isinstance(c, kind) for c in commands)
+
+
+def test_core_settle_after_arrived():
+    drive = Drive(settle_s=0.5)
+    # 向けた命令の時刻から settle_s たっても、着くまで撮らない
+    assert not has(drive.step(Tick(), 1.6), RequestFrame)
+    assert not has(drive.camera(10.0, arrived=False), RequestFrame)
+    assert not has(drive.step(Tick(), 20.0), RequestFrame)
+    # 着いた
+    assert not has(drive.camera(30.0, arrived=True), RequestFrame)
+    # 着いてから settle_s の手前では撮らない
+    assert not has(drive.step(Tick(), 30.4), RequestFrame)
+    # 着いたあとの状態が何度届いても、数え直さない
+    assert not has(drive.camera(30.45, arrived=True), RequestFrame)
+    # settle_s たって初めて撮る
+    assert has(drive.step(Tick(), 30.5), RequestFrame)
+
+
+def test_core_settle_zero_requests_on_arrival():
+    drive = Drive(settle_s=0.0)
+    assert has(drive.camera(5.0, arrived=True), RequestFrame)
+
+
+def test_core_aim_timeout():
+    drive = Drive(aim_timeout_s=60.0)  # 向けたのは 1.0 s
+    assert not has(drive.step(Tick(), 60.9), SendResult)
+    assert drive.core.state == LocateCore.RUNNING
+    drive.step(Tick(), 61.0)
+    assert drive.result().reason == "no_image"
+    assert not has(drive.commands, RequestFrame)  # 撮ってはいない
+
+    # 着いたあとに待つ上限は image_timeout_s のまま（aim_timeout_s ではない）
+    drive = Drive(aim_timeout_s=60.0, settle_s=0.5, image_timeout_s=5.0)
+    drive.camera(2.0, arrived=True)
+    assert has(drive.step(Tick(), 2.5), RequestFrame)
+    assert not has(drive.step(Tick(), 7.4), SendResult)
+    drive.step(Tick(), 7.5)
+    assert drive.result().reason == "no_image"
+
+
+def test_core_camera_taken_over():
+    rig = Rig()
+    rig.camera.point(0.3, 0.1)
+    rig.prime()
+    assert rig.accept(goal()) is None
+    run_one_frame(rig)
+    assert rig.core.stage == LocateCore.SCANNING
+    n_commands = len(rig.commands)
+
+    rig.camera.take_over()
+    rig.post(rig.camera.state())
+    rig.flush()
+
+    results = rig.results()
+    assert len(results) == 1
+    assert results[0].reason == "human_override"
+    assert results[0].cleanup_limit_s == 0.0
+    after = rig.commands[n_commands:]
+    # 昇降機もカメラも戻さない（手を離すだけ）
+    assert not any(isinstance(c, (LiftGoto, CameraPoint)) for c in after)
+    assert has(after, LiftRelease)
+    assert has(after, CameraRelease)
+    dones = rig.cleanup_dones()
+    assert len(dones) == 1 and dones[0].lift_restored is False
+    assert rig.core.state == LocateCore.IDLE
+
+
+def test_core_camera_taken_over_while_raising():
+    drive = Drive(scanning=False)
+    drive.camera(0.5, taken_over=True)
+    assert drive.result().reason == "human_override"
+    assert drive.core.state == LocateCore.IDLE
+
+
+def test_core_camera_taken_over_while_cleaning():
+    drive = Drive()
+    drive.step(Cancel(), 2.0)
+    assert drive.core.state == LocateCore.CLEANING
+    assert drive.result().reason == "canceled"
+    n_commands = len(drive.commands)
+
+    drive.camera(3.0, taken_over=True)
+    assert drive.core.state == LocateCore.IDLE
+    after = drive.commands[n_commands:]
+    assert not any(isinstance(c, (LiftGoto, CameraPoint)) for c in after)
+    assert has(after, LiftRelease) and has(after, CameraRelease)
+    dones = drive.cleanup_dones()
+    assert len(dones) == 1
+    assert dones[0].reason == "canceled"
+    assert dones[0].lift_restored is False
+
+
+def test_core_camera_failed():
+    rig = Rig(lift=FakeLift(height_m=1.5, speed_m_s=10.0),
+              camera=FakeCamera(FIXTURE, scene=0, fail_aim=True))
+    rig.prime()
+    assert rig.accept(goal()) is None
+    rig.start_scan()
+    rig.finish_cleanup(1.0)
+
+    results = rig.results()
+    assert len(results) == 1
+    assert results[0].reason == "no_image"
+    assert not has(rig.commands, RequestFrame)
+    # 後片付けはする（昇降機を元の高さへ戻し、カメラも向け直す。カメラが向けられなくても待ち続けない）
+    after = rig.commands[rig.commands.index(results[0]) + 1:]
+    assert any(isinstance(c, LiftGoto) and c.height_m == pytest.approx(1.5)
+               for c in after)
+    assert has(after, CameraPoint)
+    dones = rig.cleanup_dones()
+    assert len(dones) == 1
+    assert dones[0].lift_restored is True
+    assert rig.core.state == LocateCore.IDLE
+
+
+def test_core_cleanup_waits_camera():
+    drive = Drive(origin_height=1.9)
+    drive.step(Cancel(), 2.0)
+    assert drive.core.state == LocateCore.CLEANING
+    assert has(drive.commands[-3:], CameraPoint)
+
+    # 昇降機が先に着いても、カメラが着くまで完了を出さない
+    drive.step(LiftState(1.9, True, "none", 10.0, 10.0), 3.0)
+    assert drive.cleanup_dones() == []
+    drive.camera(3.5, arrived=False)
+    drive.step(Tick(), 4.0)
+    assert drive.cleanup_dones() == []
+    assert drive.core.state == LocateCore.CLEANING
+
+    # カメラが着いたら出す
+    drive.camera(5.0, arrived=True)
+    dones = drive.cleanup_dones()
+    assert len(dones) == 1
+    assert dones[0].lift_restored is True
+    assert drive.core.state == LocateCore.IDLE
+
+    # カメラが先に着いたときは、昇降機が着くまで出さない
+    drive = Drive(origin_height=1.9)
+    drive.step(Cancel(), 2.0)
+    drive.camera(3.0, arrived=True)
+    assert drive.cleanup_dones() == []
+    drive.step(LiftState(1.9, True, "none", 10.0, 10.0), 4.0)
+    assert len(drive.cleanup_dones()) == 1
+
+
+def test_core_cleanup_limit_includes_yaw():
+    # 昇降機の分 1.2 m ÷ 0.06 m/s = 20 s、ヨーを戻す分 180° ÷ 5°/s = 36 s、余裕 10 s
+    speed = math.radians(5.0)
+    drive = Drive(origin_height=1.9, origin_yaw=0.0, lift_speed=0.06,
+                  cleanup_margin_s=10.0)
+    drive.camera(2.0, yaw_rad=math.pi, yaw_speed_rad_s=speed)
+    drive.step(Cancel(), 2.5)
+    assert drive.result().cleanup_limit_s == pytest.approx(46.0)
+
+    # 46 s の手前では待ち、過ぎたら手を離す
+    drive.step(Tick(), 2.5 + 45.0)
+    assert drive.core.state == LocateCore.CLEANING
+    drive.step(Tick(), 2.5 + 46.0)
+    assert drive.core.state == LocateCore.IDLE
+    dones = drive.cleanup_dones()
+    assert len(dones) == 1 and dones[0].lift_restored is False
+
+    # ヨーの速さが分からなければ昇降機の分だけ（20 s + 10 s）
+    drive = Drive(origin_height=1.9, origin_yaw=0.0, lift_speed=0.06)
+    drive.camera(2.0, yaw_rad=math.pi, yaw_speed_rad_s=None)
+    drive.step(Cancel(), 2.5)
+    assert drive.result().cleanup_limit_s == pytest.approx(30.0)
+
+    # ヨーを戻さない終わり方（向きが読めない）も昇降機の分だけ
+    drive = Drive(origin_height=1.9, origin_yaw=0.0, lift_speed=0.06)
+    drive.camera(2.0, yaw_rad=math.pi, yaw_speed_rad_s=speed,
+                 restarted=True, pose_known=False)
+    assert drive.result().reason == "camera_pose_unknown"
+    assert drive.result().cleanup_limit_s == pytest.approx(30.0)
+
+    # 昇降機の分のほうが長ければ、そちら（180° ÷ 20°/s = 9 s < 20 s）
+    drive = Drive(origin_height=1.9, origin_yaw=0.0, lift_speed=0.06)
+    drive.camera(2.0, yaw_rad=math.pi, yaw_speed_rad_s=math.radians(20.0))
+    drive.step(Cancel(), 2.5)
+    assert drive.result().cleanup_limit_s == pytest.approx(30.0)
