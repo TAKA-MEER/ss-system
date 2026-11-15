@@ -51,5 +51,6 @@ def test_locate_panels_fields():
         "panels": "sequence<ss_msgs/PanelTop>",
         "seen_from_rad": "sequence<float>",
         "seen_span_rad": "sequence<float>",
+        "cleanup_limit_s": "float",
     }
     assert LocatePanels.Feedback.get_fields_and_field_types() == {"phase": "string"}
