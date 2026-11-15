@@ -162,7 +162,13 @@ class LiftLink:
         """今の `LiftState` を返す。"""
         now = float(now)
         self._evaluate(now)
-        return LiftState(self._height_m(now), self._arrived, self._stopped_reason)
+        up = down = None
+        if self._speeds is not None:
+            up = self._speeds[0] / 1000.0
+            down = self._speeds[1] / 1000.0
+        return LiftState(
+            self._height_m(now), self._arrived, self._stopped_reason, up, down
+        )
 
     # ------------------------------------------------------------------ 中身
     def _is_stale(self, now):

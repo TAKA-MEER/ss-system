@@ -82,7 +82,13 @@ class FakeLift:
         return self.state()
 
     def state(self):
-        return LiftState(float(self.height_m), bool(self._arrived), self._stopped_reason)
+        return LiftState(
+            float(self.height_m),
+            bool(self._arrived),
+            self._stopped_reason,
+            self.speed_m_s,
+            self.speed_m_s,
+        )
 
     def take_over(self):
         """人に取って代わられた。"""
@@ -102,9 +108,11 @@ class FakeCamera:
         self.yaw_rad = 0.0
         self.pitch_down_rad = 0.0
         self.restarted = False
+        self.pose_known = True
 
     def point(self, yaw_rad, pitch_down_rad):
-        self.yaw_rad = float(yaw_rad)
+        if yaw_rad is not None:
+            self.yaw_rad = float(yaw_rad)
         self.pitch_down_rad = float(pitch_down_rad)
         self.restarted = False
 
@@ -122,12 +130,13 @@ class FakeCamera:
         }
 
     def restart(self):
-        """再起動の印を立て、ピッチの目標角を 0 にする。"""
+        """再起動の印を立て、向きを読めなくし、ピッチの目標角を 0 にする。"""
         self.restarted = True
+        self.pose_known = False
         self.pitch_down_rad = 0.0
 
     def state(self):
-        return CameraState(self.yaw_rad, self.pitch_down_rad, self.restarted)
+        return CameraState(self.yaw_rad, self.pitch_down_rad, self.restarted, self.pose_known)
 
 
 class FakeDetector:
