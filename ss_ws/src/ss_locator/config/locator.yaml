@@ -28,3 +28,9 @@ locator_node:
     use_fakes: false
     fake_fixture: ss_ws/src/ss_locator/tests/fixtures/proto_9265d2d.json
     fake_scene: 0
+
+    hve_lift: false
+    lift_host: hve-lift.local
+    lift_speed_mm_s: 40
+    lift_cmd_period_ms: 100
+    lift_state_timeout_ms: 600

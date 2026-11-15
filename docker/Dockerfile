@@ -43,4 +43,5 @@ RUN python3 -m pip install \
       'nvidia-ml-py>=12.0.0' \
       'ultralytics-thop>=2.2.3' \
       'opencv-python>=4.7.0,<4.12' \
+      'websockets==15.0.1' \
       pytest

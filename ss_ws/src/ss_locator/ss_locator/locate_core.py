@@ -36,7 +36,7 @@ class Cancel:
 class LiftState:
     """昇降部の高さ（配信値）・目標に着いたか・止まった理由。"""
 
-    height_m: float
+    height_m: float | None  # None は読めない（未着・原点前・古い）
     arrived: bool = False
     stopped_reason: str = "none"  # none / ceiling / refused / human
 
@@ -198,7 +198,11 @@ class LocateCore:
         self._goal = goal
         self._accepted_at = float(now)
         self._max_distance = distance
-        self._origin_height = None if self._lift is None else float(self._lift.height_m)
+        self._origin_height = (
+            None
+            if self._lift is None or self._lift.height_m is None
+            else float(self._lift.height_m)
+        )
         self._origin_yaw = 0.0 if self._camera is None else float(self._camera.yaw_rad)
         self._origin_pitch = 0.0 if self._camera is None else float(self._camera.pitch_down_rad)
 
@@ -262,6 +266,8 @@ class LocateCore:
                 if reason == "refused":
                     return self._finish("lift_refused", now)
                 if reason == "ceiling":
+                    if event.height_m is None:
+                        return self._finish("camera_too_low", now)
                     optical = float(event.height_m) + float(
                         self._get("camera_height_offset_m", 0.0)
                     )
