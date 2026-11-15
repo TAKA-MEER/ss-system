@@ -20,6 +20,7 @@
 | `WP-DEMO-01` | 金具認識のリアルタイム表示（本番外の道具） | `WP-DET-01` | できる |
 | `WP-DEMO-02` | 金具認識のリアルタイム表示の起動スクリプト | `WP-DEMO-01` | できる |
 | `WP-DEMO-03` | 金具認識のリアルタイム表示に速さと入力の解像度を出す | `WP-DEMO-01` | できる |
+| `WP-LOC-03` | 口の版 2（理由 2 つ・後片付けの上限・`cleanup_limit_s`） | `WP-HVE-01` | **fk-system の確認待ち**（2026-11-16 ユーザー決定の分） |
 | `WP-TEST-01` | 依頼を手で試す道具（テスト用の端末のコマンド） | `WP-LOC-02` | **ユーザーの確認待ち**（[Spec-tester.md](../spec/Spec-tester.md) §3） |
 
 先行試作は `../../lifting-lug-pose` の `9265d2d`。**試作のリポジトリは読むだけで、書き換えない。**
@@ -204,8 +205,8 @@ ros2 topic echo /ss/locate/cleanup_done
 | --- | --- |
 | `hve_lift_core.py` | `LiftLink`・`hello_message`（[-hve.md](DetailedDesign-hve.md) §2〜§4）。WebSocket・ROS 2 を読み込まない |
 | `hve_lift.py` | `HveLift`（[-hve.md](DetailedDesign-hve.md) §5） |
-| `locate_core.py` | `LiftState.height_m` の `None` を受ける（[-hve.md](DetailedDesign-hve.md) §3）。ほかは変えない |
-| `locator_node.py`・`config/locator.yaml` | [-names.md](DetailedDesign-names.md) §7 のパラメータ 5 つと、`hve_lift` が true のときの差し替え |
+| `locate_core.py` | `LiftState.height_m` の `None` を受ける（[-hve.md](DetailedDesign-hve.md) §3）。`stopped_reason` の `ceiling_unknown` を `ceiling` と同じに扱う（理由を分けて返すのは `WP-LOC-03`）。ほかは変えない |
+| `locator_node.py`・`config/locator.yaml` | [-names.md](DetailedDesign-names.md) §7 のパラメータ 4 つと、`hve_lift` が true のときの差し替え |
 | Docker | `docker/Dockerfile` に `websockets` を足す。足した版をパケットの報告に書く |
 
 **受け入れ条件**: `docker run --rm -v "$PWD":/ws ss-system:dev bash scripts/test.sh` が 0 で終わる（今までの試験も通る）。**実時間で待つ試験は、小さなサーバを相手にする `test_hve_lift.py` だけにし、純関数の試験は時刻を引数で渡す。**
@@ -219,7 +220,11 @@ ros2 topic echo /ss/locate/cleanup_done
 | `test_stops_sending_after_arrived` | 着いたあと `poll` は `goto` を返さない |
 | `test_human_takeover_stops_sending` | [-hve.md](DetailedDesign-hve.md) §4 の 1・2・3 のそれぞれで `stopped_reason` が `human` になり、**その次の `poll` から `goto` を返さない**。3 は着いたあと（送っていない間）でも |
 | `test_idle_ignores_owner` | 命令が無い間は、持ち主が人でも `stopped_reason` は `none` |
-| `test_reason_table` | [-hve.md](DetailedDesign-hve.md) §4 の 4・5・6 の名前を 1 つずつ。知らない名前は `refused`。上昇の `BOTTOM` は `refused` |
+| `test_reason_table` | [-hve.md](DetailedDesign-hve.md) §4 の 4・4a・5・6 の名前を 1 つずつ（`CEILING_STALE` は `ceiling_unknown`）。知らない名前は `refused`。上昇の `BOTTOM` は `refused` |
+| `test_speed_from_settings` | `set_speeds(30, 20)` のあと、上昇の `goto` の `speed` が 30、下降が 20。**`set_speeds` の前の `LiftGoto` は `goto` を返さず `refused`** |
+| `test_max_run_retries` | `MAX_RUN` で `press` が増えた `goto` を返し続け、`LIFT_MAX_RUN_RETRY` 回を超えると `refused` |
+| `test_target_range_down_refused` | 下降の `TARGET_RANGE` は `refused`（上昇は `ceiling`） |
+| `test_hve_lift_reads_settings` | 小さなサーバの `/api/settings` の `lift_up`・`lift_down` の `init` を読み、`min`〜`max` に収めた値が `goto` の `speed` に入る。設定が取れないと `goto` が届かない |
 | `test_height_unknown` | `height_ok` が false・`state` をまだ受けていない・`lift_state_timeout_ms` より古い、のそれぞれで `height_m` が `None` |
 | `test_stale_requests_reconnect` | 最後の `state` から `lift_state_timeout_ms` を過ぎると `poll` が「繋ぎ直す」を返し、命令の途中なら `refused`。繋ぎ直して新しい `state` が来ても、その命令の `goto` は返さない |
 | `test_release_once` | `LiftRelease` で `release` が 1 回だけ出て、`press` は最後の `goto` と同じ。命令が無ければ出ない |
@@ -245,8 +250,8 @@ ros2 action send_goal /ss/locate/panels ss_msgs/action/LocatePanels \
 
 | 場面 | 見ること |
 | --- | --- |
-| 天井の値の出どころが繋がっていない | 昇降機が上がらず、結果が `camera_too_low`（偽の昇降部の画面に「画像認識で操作中」が出る） |
-| hve の偽のカメラモジュールを繋いだ | 上がって `completed`、終わると元の高さへ戻り、`cleanup_done` の `lift_restored` が true |
+| 天井の値の出どころが繋がっていない | 昇降機が上がらず、結果が `camera_too_low`（ログに `CEILING_STALE`） |
+| hve の `python tools/lift_probe.py ws://127.0.0.1:18080/ws/module --name hve-cam` を動かし、`c` キーで天井を遠い値にした（2026-11-16 hve の答え。キーを押さなければ持ち主にならない） | 上がって `completed`、終わると元の高さへ戻り、`cleanup_done` の `lift_restored` が true |
 | 上がっている途中に、偽の昇降部の画面から人が操作した | すぐ `goto` が止まり、結果が `human_override`、昇降機は戻らない |
 
 `camera_height_offset_m` の 1.9 は、この確認のためだけの値（hve「下端のとき機体は約 1900 mm」から。光学中心の実測値ではない）。
@@ -403,3 +408,29 @@ ros2 run ss_locator locate_cli --plot .briefs/tmp/top.png --json .briefs/tmp/res
 | `test_cli_writes_plot_and_json` | `--plot`・`--json` のファイルができ、PNG が 800×800、JSON の `reason` が結果と同じ。付けなければファイルができない |
 
 **変異チェック（実装管理担当が自分で回す）**: (1) `locate_cli.py` で確認に `n` でも依頼を送る、(2) 取り消したあと後片付けの完了を待たずに終わる、(3) `cleanup_done` の依頼の ID を照らさない、(4) `locate_view.py` で度を rad に直さない、(5) 図の左右を逆にする、のそれぞれで試験が落ちること。
+
+## `WP-LOC-03` 口の版 2
+
+**状態: 2026-11-16 案。fk-system の確認待ち**（口が変わるので、fk-system が確かめてから発注する）。
+
+**読む節**: [-locate.md](DetailedDesign-locate.md) §2.2・§2.4・§3・§4（「版 2」と書いた所）、[-core.md](DetailedDesign-core.md) §5、[-hve.md](DetailedDesign-hve.md) §4、[-names.md](DetailedDesign-names.md) §3・§9。
+
+| やること | 中身 |
+| --- | --- |
+| 型 | `LocatePanels.action` の結果に `float32 cleanup_limit_s` を足す |
+| `locate_core.py` | 理由 `ceiling_unknown`・`camera_pose_unknown`（受け付けのときと途中の両方。**再起動で撮り直すのをやめる**）。後片付けの上限を距離 ÷ 速さ ＋ `cleanup_margin_s` にし、`SendResult.cleanup_limit_s` に入れる。速さが `None` なら `cleanup_timeout_s` |
+| `hve_lift_core.py`・`fakes.py` | `LiftState` に速さを入れる。`FakeCamera.restart()` は `pose_known` を false にする |
+| `locator_node.py`・`config/locator.yaml` | `cleanup_limit_s` を結果に入れる。`INTERFACE_VERSION` を `"2"`。`cleanup_margin_s` |
+
+| 試験 | 確かめること |
+| --- | --- |
+| `test_core_ceiling_unknown` | 上昇が `ceiling_unknown` で止まり高さが足りないと、結果が `ceiling_unknown`（`ceiling` なら `camera_too_low` のまま）。昇降機は戻す |
+| `test_core_pose_unknown_at_accept` | 受け付けのとき向きが読めなければ、`LiftGoto`・`CameraPoint` を出さずに `camera_pose_unknown` |
+| `test_core_restart_ends_request` | 走査の途中で再起動すると、撮り直さずに `camera_pose_unknown` で終わり、それまでの盤と見た範囲を返す。**後片付けで `CameraPoint` のヨーを戻す命令を出さない**。昇降機は戻す（今の `test_core_restart_discards` を置き換える） |
+| `test_core_cleanup_limit_from_speed` | 高さの差 1.2 m・下降 0.03 m/s・余裕 10 s で `cleanup_limit_s` が 50。その時間までは待ち、過ぎたら手を離して `lift_restored: false` |
+| `test_core_cleanup_limit_fallback` | 速さが `None` なら `cleanup_limit_s` は `cleanup_timeout_s` |
+| `test_core_cleanup_limit_zero_when_no_restore` | `human_override` の結果の `cleanup_limit_s` は 0 |
+| `test_node_result_has_cleanup_limit` | ノードの結果に `cleanup_limit_s` が入り、`cleanup_done` がその時間のうちに来る |
+| `test_node_interface_version` | `status` の `interface_version` が `"2"` |
+
+**変異チェック（実装管理担当が自分で回す）**: (1) 上限を速さに関係なく `cleanup_timeout_s` にする、(2) 再起動のあと撮り直す、(3) 向きが読めないのに `LiftGoto` を出す、(4) `ceiling_unknown` を `camera_too_low` にまとめる、のそれぞれで試験が落ちること。

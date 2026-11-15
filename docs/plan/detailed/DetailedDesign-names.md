@@ -27,7 +27,7 @@
 
 | 相手 | 出どころ | 状態 |
 | --- | --- | --- |
-| hve-system（昇降部） | hve [DetailedDesign-protocol-modules.md](../../../../hve-system/docs/plan/detailed/DetailedDesign-protocol-modules.md) §1〜§4。本システムは名前 `ss`・`operator: auto`・`ceiling_sensor: false`・`busy_label`「画像認識で操作中」で繋ぐ | 2026-11-05 本システムが確かめた。**hve が実機に入れたと知らせるまで、この名前で実装しない・今の昇降部で上昇させない**。2026-11-15 時点: hve の `main` に入った（実機はまだ。`goto` のファームは hve `WP-LIFT-14` で未着手）。本システムの使い方は [-hve.md](DetailedDesign-hve.md)・§7（案）。**偽の昇降部を相手に実装する**（2026-11-15 ユーザー決定。[-open.md](DetailedDesign-open.md) §1 の 7）。実機で上昇させないのは今のまま |
+| hve-system（昇降部） | hve [DetailedDesign-protocol-modules.md](../../../../hve-system/docs/plan/detailed/DetailedDesign-protocol-modules.md) §1〜§4。本システムは名前 `ss`・`operator: auto`・`ceiling_sensor: false`・`busy_label`「画像認識で操作中」で繋ぐ | 2026-11-05 本システムが確かめた。**hve が実機に入れたと知らせるまで、この名前で実装しない・今の昇降部で上昇させない**。2026-11-16 時点: `goto` のファーム（hve `WP-LIFT-14`。`af1eb0f`）まで hve の `main` に入った。**昇降部への書き込みと実機での確認はまだ**。本システムの使い方は [-hve.md](DetailedDesign-hve.md)・§7（案）。**偽の昇降部を相手に実装する**（2026-11-15 ユーザー決定。[-open.md](DetailedDesign-open.md) §1 の 7）。実機で上昇させないのは今のまま |
 | hve-system（カメラモジュール） | hve がこれから書く（昇降部の口のあと。hve [ImplementationPlan.md](../../../../hve-system/docs/plan/ImplementationPlan.md) §6 の行 8a） | 未着（2026-11-15 時点で未着手） |
 
 ## 2. パッケージ
@@ -47,14 +47,14 @@
 
 | 型 | 中身 |
 | --- | --- |
-| `LocatePanels.action` | 依頼: `float32 azimuth_from_rad` / `float32 azimuth_span_rad` / `float32 max_distance_m` / `float32 time_limit_s` ― 結果: `std_msgs/Header header` / `string reason` / `PanelTop[] panels` / `float32[] seen_from_rad` / `float32[] seen_span_rad` ― 途中経過: `string phase` |
+| `LocatePanels.action` | 依頼: `float32 azimuth_from_rad` / `float32 azimuth_span_rad` / `float32 max_distance_m` / `float32 time_limit_s` ― 結果: `std_msgs/Header header` / `string reason` / `PanelTop[] panels` / `float32[] seen_from_rad` / `float32[] seen_span_rad` / `float32 cleanup_limit_s`（版 2） ― 途中経過: `string phase` |
 | `PanelTop.msg` | `float64 x_m` / `float64 y_m` / `float32 top_height_m` / `bool height_measured` / `float64 yaw_rad` / `float32 width_m` / `float32 depth_m` / `float32 pos_std_m` / `float32 yaw_std_deg` / `int32 lugs` / `bool front_known` / `float64 front_yaw_rad` |
 | `CleanupDone.msg` | `std_msgs/Header header` / `unique_identifier_msgs/UUID goal_id` / `string reason` / `bool lift_restored` |
 | `LocatorStatus.msg` | `std_msgs/Header header` / `string interface_version` / `string phase` / `unique_identifier_msgs/UUID goal_id` / `string last_reject_reason` |
 
 | 種類 | 名前 |
 | --- | --- |
-| 終わり方（`reason`） | `completed` / `no_lugs` / `lugs_ungrouped` / `no_image` / `lift_refused` / `camera_too_low` / `canceled` / `timeout` / `human_override` |
+| 終わり方（`reason`） | `completed` / `no_lugs` / `lugs_ungrouped` / `no_image` / `lift_refused` / `camera_too_low` / `ceiling_unknown`（版 2） / `camera_pose_unknown`（版 2） / `canceled` / `timeout` / `human_override` |
 | 状態（`phase`） | `IDLE` / `RUNNING` / `CLEANING` |
 | 途中経過の段（feedback の `phase`） | `RAISING` / `SCANNING` / `ESTIMATING` |
 | 拒否の理由（`last_reject_reason`） | `busy` / `bad_range` / `bad_distance` / `bad_time_limit` |
@@ -64,7 +64,8 @@
 | `max_distance_default_m` | m | 5.0 | [Spec.md](../spec/Spec.md) §1.2「撮り方」（盤まで 5 m 以内） |
 | `top_height_default_m` | m | 2.35 | [Spec.md](../spec/Spec.md) §1.1「高さ」 |
 | `status_period_ms` | ms | 200 | 暫定 |
-| `cleanup_timeout_s` | s | 30 | 暫定（後片付けの上限。過ぎたら手を離して `lift_restored: false`） |
+| `cleanup_timeout_s` | s | 30 | 暫定（**昇降の速さが分からないとき**の後片付けの上限。分かるときは [-locate.md](DetailedDesign-locate.md) §3 の式。過ぎたら手を離して `lift_restored: false`） |
+| `cleanup_margin_s` | s | 10 | **暫定**（版 2。後片付けの上限に足す余裕。`WP-LOC-03`） |
 
 ## 4. ファイル・ディレクトリ
 
@@ -133,6 +134,9 @@
 | `hello_message` | 関数 | `hello` の dict を返す（[-hve.md](DetailedDesign-hve.md) §2.1） |
 | `ss_locator/hve_lift.py` | ファイル（つなぐ） | `HveLift`（`apply`・`advance`・`close`。[-hve.md](DetailedDesign-hve.md) §5） |
 | `LIFT_WS_MODULE_PATH` | 定数（`hve_lift.py`） | `/ws/module`。パラメータにしない |
+| `LiftLink.set_speeds` | メソッド | 昇降部の設定から取った上昇・下降の速さを渡す（[-hve.md](DetailedDesign-hve.md) §2.2） |
+| `LIFT_SETTINGS_PATH` | 定数（`hve_lift.py`） | `/api/settings` |
+| `LIFT_MAX_RUN_RETRY` | 定数（`hve_lift_core.py`） | 3。**暫定**（`MAX_RUN` で送り直す回数の上限。[-hve.md](DetailedDesign-hve.md) §4 の 5a） |
 | `LIFT_NAME`・`LIFT_BUSY_LABEL` | 定数（`hve_lift_core.py`） | `ss`・「画像認識で操作中」（2026-11-05 に hve と取り決めた値） |
 | `LiftState.height_m` の `None` | `locate_core.py` | 高さが読めない（[-hve.md](DetailedDesign-hve.md) §3） |
 | `tests/test_hve_lift_core.py`・`tests/test_hve_lift.py`・`tests/lift_stub_server.py` | 試験 | `WP-HVE-01`。`lift_stub_server.py` は試験の中だけで使う小さな WebSocket のサーバ（受けた文を覚え、渡された `state` を送る） |
@@ -141,7 +145,6 @@
 | --- | --- | --- | --- |
 | `hve_lift` | — | false | 昇降機だけ hve の口を使う。`use_fakes` が true のときだけ意味を持つ（カメラが本物になる `WP-HVE-02` までの確認用） |
 | `lift_host` | — | `hve-lift.local` | 先方（hve [DetailedDesign-protocol-modules.md](../../../../hve-system/docs/plan/detailed/DetailedDesign-protocol-modules.md) §1.4）。`host` か `host:port`。コンテナの中から名前が引けなければ IP を与える（**実機で確かめる**） |
-| `lift_speed_mm_s` | mm/s | 40 | **暫定**（hve の文書の例の値。昇降部の設定の範囲に入る値を実機で決める。[-open.md](DetailedDesign-open.md) §1 の 9） |
 | `lift_cmd_period_ms` | ms | 100 | 先方（hve が勧める間隔。2026-11-05 に hve へ答えた値） |
 | `lift_state_timeout_ms` | ms | 600 | 2026-11-05 に hve へ答えた値（`state` の配信は hve の仮値で 100 ms ごと） |
 
@@ -157,3 +160,13 @@
 | `--from-deg`・`--span-deg`・`--max-distance-m`・`--time-limit-s`・`--yes`・`--status`・`--plot`・`--json`・`--wait-s`・`--cleanup-wait-s` | `locate_cli` の引数 | [-tester.md](DetailedDesign-tester.md) §2 |
 | 終了コード 0・2・3・4・5・130 | `locate_cli` | 結果と後片付けの完了を受けた（または依頼を出さずに終わった）・引数の誤り・応えない／版が合わない・依頼できない／拒否・後片付けの完了が届かない・待たずに終わった（[-tester.md](DetailedDesign-tester.md) §3） |
 | `tests/test_locate_view.py`・`tests/test_locate_cli.py` | 試験 | `WP-TEST-01` |
+
+## 9. 口の版 2 で足す名前（`WP-LOC-03`。[-locate.md](DetailedDesign-locate.md)）
+
+| 名前 | 種類 | 中身 |
+| --- | --- | --- |
+| `LiftState.up_speed_m_s`・`LiftState.down_speed_m_s` | `locate_core.py` | 昇降の速さ [m/s]。分からなければ `None`。`HveLift` は昇降部の設定から、`FakeLift` は自分の速さを入れる |
+| `LiftState.stopped_reason` の `ceiling_unknown` | `locate_core.py` | 天井の値が無くて上がれない（[-hve.md](DetailedDesign-hve.md) §4 の 4a） |
+| `CameraState.pose_known` | `locate_core.py` | カメラの向きが読めるか。偽のカメラは `restart()` で false にする。本物は `WP-HVE-02` |
+| `SendResult.cleanup_limit_s` | `locate_core.py` | 結果の `cleanup_limit_s` に入れる値 |
+| `INTERFACE_VERSION` | `locator_node.py` | `"2"` |
