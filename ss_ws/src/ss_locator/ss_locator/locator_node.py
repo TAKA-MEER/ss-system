@@ -383,7 +383,10 @@ class LocatorNode(Node):
         """撮れた（または撮れなかった）結果を検出して、出来事として積む。"""
         try:
             events = self._frame_events(verdict, captured)
-        except Exception:
+        except Exception as error:
+            self.get_logger().error(
+                "静止画の検出・床への戻しで例外: %s: %s" % (type(error).__name__, error)
+            )
             events = [FrameDone(0.0, [], False)]
         with self._lock:
             self._events.extend(events)
