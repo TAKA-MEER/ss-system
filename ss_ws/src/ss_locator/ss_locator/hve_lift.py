@@ -57,6 +57,7 @@ class HveLift:
         self._loop = None
         self._ws = None
         self._closed = False
+        self._modules = None
         self._thread = threading.Thread(
             target=self._run, name="hve_lift", daemon=True
         )
@@ -77,6 +78,11 @@ class HveLift:
         """今の `LiftState` を返す（`dt_s` は使わない）。"""
         with self._lock:
             return self._link.lift_state(time.monotonic())
+
+    def modules(self):
+        """最後に受けた `state` の `modules`（読み取り専用。無ければ `None`）。"""
+        with self._lock:
+            return self._modules
 
     def close(self):
         """命令の途中なら `release` を送ってから閉じる。"""
@@ -189,6 +195,7 @@ class HveLift:
                 with self._lock:
                     self._loop = None
                     self._ws = None
+                    self._modules = None
                     self._link.on_closed(time.monotonic())
             await self._sleep(self._retry_s)
 
@@ -201,6 +208,8 @@ class HveLift:
                     continue
                 with self._lock:
                     self._link.on_state(message, time.monotonic())
+                    if isinstance(message, dict) and message.get("t") == "state":
+                        self._modules = message.get("modules")
         except asyncio.CancelledError:
             raise
         except Exception:
