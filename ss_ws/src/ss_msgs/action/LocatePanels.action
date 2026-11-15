@@ -8,5 +8,6 @@ string reason
 ss_msgs/PanelTop[] panels
 float32[] seen_from_rad
 float32[] seen_span_rad
+float32 cleanup_limit_s
 ---
 string phase

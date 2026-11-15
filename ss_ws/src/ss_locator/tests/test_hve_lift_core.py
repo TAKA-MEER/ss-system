@@ -345,3 +345,13 @@ def test_release_once():
     assert link.poll(0.1)[0] == []
     link.on_command(LiftRelease(), 0.2)
     assert link.poll(0.2)[0] == []
+
+
+def test_lift_state_has_speeds():
+    link = make_link(speeds=(30, 20))
+    state = link.lift_state(0.0)
+    assert state.up_speed_m_s == pytest.approx(0.030)
+    assert state.down_speed_m_s == pytest.approx(0.020)
+    link = make_link(speeds=None)
+    state = link.lift_state(0.0)
+    assert state.up_speed_m_s is None and state.down_speed_m_s is None

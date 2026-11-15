@@ -9,6 +9,7 @@ from ss_locator import assemble, scan_plan
 from ss_locator.fakes import FakeCamera, FakeDetector, FakeLift
 from ss_locator.locate_core import (
     CameraPoint,
+    CameraState,
     Cancel,
     FrameDone,
     GoalRequest,
@@ -46,6 +47,8 @@ def make_params(**overrides):
         "settle_s": 0.5,
         "image_timeout_s": 5.0,
         "cleanup_timeout_s": 30.0,
+        "cleanup_margin_s": 10.0,
+        "cleanup_limit_max_s": 200.0,
         "camera_height_offset_m": 0.0,
         "hfov_rad": _hfov(),
     }
@@ -356,14 +359,17 @@ def test_core_height_none_refused():
     assert dones[0].lift_restored is False
 
 
-def test_core_ceiling_unknown_like_ceiling():
-    class UnknownCeilingLift(FakeLift):
-        def advance(self, dt_s):
-            state = super().advance(dt_s)
-            if self._arrived:
-                return LiftState(state.height_m, False, "ceiling_unknown")
-            return state
+class UnknownCeilingLift(FakeLift):
+    """上昇が天井の値なしで止まる（`ceiling_unknown`）。"""
 
+    def advance(self, dt_s):
+        state = super().advance(dt_s)
+        if self._arrived and self._at_ceiling:
+            return LiftState(state.height_m, False, "ceiling_unknown")
+        return state
+
+
+def test_core_ceiling_unknown():
     rig = Rig(lift=UnknownCeilingLift(height_m=0.0, speed_m_s=10.0, max_height_m=2.0))
     rig.prime()
     assert rig.accept(goal()) is None
@@ -373,7 +379,45 @@ def test_core_ceiling_unknown_like_ceiling():
 
     results = rig.results()
     assert len(results) == 1
-    assert results[0].reason == "camera_too_low"
+    assert results[0].reason == "ceiling_unknown"
+    # 昇降機は元の高さへ戻す
+    after = rig.commands[rig.commands.index(results[0]) + 1:]
+    assert any(isinstance(c, LiftGoto) and c.height_m == pytest.approx(0.0) for c in after)
+
+    # 天井の値があって届かないときは今までどおり camera_too_low
+    rig = Rig(lift=FakeLift(height_m=0.0, speed_m_s=10.0, max_height_m=2.0))
+    rig.prime()
+    assert rig.accept(goal()) is None
+    rig.advance(0.0)
+    rig.advance(1.0)
+    assert rig.results()[0].reason == "camera_too_low"
+
+
+def test_core_ceiling_unknown_enough_height_scans():
+    # 光学中心が min_camera_height_m に届いていれば、ceiling_unknown でも走査へ進む
+    rig = Rig(lift=UnknownCeilingLift(height_m=0.0, speed_m_s=10.0, max_height_m=3.0))
+    rig.prime()
+    assert rig.accept(goal()) is None
+    rig.advance(0.0)
+    rig.advance(1.0)
+    assert rig.core.stage == LocateCore.SCANNING
+
+
+def test_core_pose_unknown_at_accept():
+    rig = Rig()
+    rig.post(rig.lift.state())
+    rig.post(CameraState(0.0, 0.0, False, False))
+    rig.flush()
+    assert rig.accept(goal()) is None
+    rig.advance(0.0)
+
+    results = rig.results()
+    assert len(results) == 1
+    assert results[0].reason == "camera_pose_unknown"
+    assert results[0].cleanup_limit_s == 0.0
+    assert not any(isinstance(c, (LiftGoto, CameraPoint)) for c in rig.commands)
+    assert rig.cleanup_dones()[0].lift_restored is False
+    assert rig.core.state == LocateCore.IDLE
 
 
 def test_core_reason_canceled():
@@ -445,6 +489,40 @@ def test_core_partial(stopper):
 
 
 # ---------------------------------------------------------------- 後片付け
+class NoSpeedLift(FakeLift):
+    """速さを知らせない昇降部（`LiftState` の速さが `None`）。"""
+
+    def __init__(self, *args, report_speed=None, **kwargs):
+        super().__init__(*args, **kwargs)
+        self.report_speed = report_speed
+
+    def state(self):
+        base = super().state()
+        return LiftState(base.height_m, base.arrived, base.stopped_reason,
+                         self.report_speed, self.report_speed)
+
+
+class SlowDownLift(FakeLift):
+    """動きは速いが、下降の速さだけ別の値を知らせる。"""
+
+    def __init__(self, *args, down_speed=None, **kwargs):
+        super().__init__(*args, **kwargs)
+        self.down_speed = down_speed
+
+    def state(self):
+        base = super().state()
+        return LiftState(base.height_m, base.arrived, base.stopped_reason,
+                         base.up_speed_m_s, self.down_speed)
+
+
+def _scan_to_cleaning(rig):
+    assert rig.accept(goal()) is None
+    rig.start_scan()
+    for _ in range(len(rig.core._yaws)):
+        rig.advance(rig.params["settle_s"])
+    assert rig.core.state == LocateCore.CLEANING
+
+
 def test_core_cleanup_restores():
     origin_height = 1.5
     origin_yaw, origin_pitch = 0.3, 0.1
@@ -499,8 +577,9 @@ def test_core_human_no_restore():
 
 def test_core_cleanup_timeout():
     origin_height = 0.0
+    # 速さが分からない昇降部なので、上限は cleanup_timeout_s
     rig = Rig(params=make_params(cleanup_timeout_s=0.1, settle_s=0.1),
-              lift=FakeLift(height_m=origin_height, speed_m_s=0.2))
+              lift=NoSpeedLift(height_m=origin_height, speed_m_s=0.2))
     rig.prime()
     assert rig.accept(goal()) is None
     rig.start_scan()  # 3.1 m 上がる
@@ -516,36 +595,39 @@ def test_core_cleanup_timeout():
 
 
 # ---------------------------------------------------------------- 再起動
-def test_core_restart_discards():
-    rig = Rig(params=make_params(settle_s=0.5))
+def test_core_restart_ends_request():
+    origin_height, origin_pitch = 1.5, 0.1
+    rig = Rig(params=make_params(settle_s=0.1),
+              lift=FakeLift(height_m=origin_height, speed_m_s=10.0))
+    rig.camera.point(0.3, origin_pitch)
     rig.prime()
     assert rig.accept(goal()) is None
     rig.start_scan()
-    first_yaw = rig.core._yaws[0]
-    assert rig.core._scan_index == 0
+    rig.advance(0.1)  # 1 枚撮る
+    assert rig.core._scan_index >= 1
+    n_commands = len(rig.commands)
 
-    # 撮る前にカメラが再起動した
     rig.camera.restart()
     rig.post(rig.camera.state())
-    commands = rig.flush()
-    repointed = [c for c in commands if isinstance(c, CameraPoint)]
-    assert len(repointed) == 1
-    assert repointed[0].yaw_rad == pytest.approx(first_yaw)
-    assert repointed[0].pitch_down_rad == pytest.approx(
-        math.radians(rig.params["scan_pitch_down_deg"])
-    )
+    rig.flush()
+    rig.finish_cleanup(1.0)
 
-    # 再起動の印のあいだに来た FrameDone は捨てる
-    rig.post(FrameDone(first_yaw, [], True))
-    commands = rig.flush()
-    assert rig.core._scan_index == 0
-    assert not any(isinstance(c, CameraPoint) for c in commands)
-
-    # 向け直したあとは、そのヨーを撮り直して次へ進む
-    rig.advance(0.5)
-    assert rig.core._scan_index == 1
-    next_point = [c for c in rig.commands if isinstance(c, CameraPoint)][-1]
-    assert next_point.yaw_rad == pytest.approx(rig.core._yaws[1])
+    results = rig.results()
+    assert len(results) == 1
+    assert results[0].reason == "camera_pose_unknown"
+    assert results[0].seen_from and results[0].seen_span
+    after_restart = rig.commands[n_commands:]
+    # 撮り直さない
+    assert not any(isinstance(c, RequestFrame) for c in after_restart)
+    # ヨーを戻す命令を出さない（ピッチは戻す）
+    points = [c for c in after_restart if isinstance(c, CameraPoint)]
+    assert points and all(c.yaw_rad is None for c in points)
+    assert any(c.pitch_down_rad == pytest.approx(origin_pitch) for c in points)
+    # 昇降機は戻す
+    assert any(isinstance(c, LiftGoto) and c.height_m == pytest.approx(origin_height)
+               for c in after_restart)
+    assert rig.cleanup_dones()[0].lift_restored is True
+    assert rig.core.state == LocateCore.IDLE
 
 
 def test_core_end_to_end_fixture():
@@ -571,3 +653,65 @@ def test_core_end_to_end_fixture():
     assert phases[0] == "RAISING"
     assert "SCANNING" in phases
     assert "ESTIMATING" in phases
+
+
+# ---------------------------------------------------------------- 後片付けの上限（版 2）
+def test_core_cleanup_limit_from_speed():
+    # 元の高さ 1.9 m・走査の高さ 3.1 m。差 1.2 m ÷ 0.03 m/s = 40 s、余裕 10 s で 50 s
+    rig = Rig(params=make_params(settle_s=0.1),
+              lift=SlowDownLift(height_m=1.9, speed_m_s=10.0, down_speed=0.03))
+    rig.prime()
+    _scan_to_cleaning(rig)
+    assert rig.results()[0].cleanup_limit_s == pytest.approx(50.0)
+
+    # 50 s の手前では待つ
+    rig.advance(0.0)
+    rig.lift._target = None  # 着かせない
+    rig.advance(48.0)
+    assert rig.core.state == LocateCore.CLEANING
+    assert not rig.cleanup_dones()
+    # 過ぎたら手を離して lift_restored: false
+    rig.advance(3.0)
+    dones = rig.cleanup_dones()
+    assert len(dones) == 1
+    assert dones[0].lift_restored is False
+    assert rig.core.state == LocateCore.IDLE
+
+
+@pytest.mark.parametrize("speed", [None, 0.0])
+def test_core_cleanup_limit_fallback(speed):
+    rig = Rig(params=make_params(settle_s=0.1, cleanup_timeout_s=33.0),
+              lift=NoSpeedLift(height_m=1.9, speed_m_s=10.0, report_speed=speed))
+    rig.prime()
+    _scan_to_cleaning(rig)
+    assert rig.results()[0].cleanup_limit_s == pytest.approx(33.0)
+
+
+def test_core_cleanup_limit_capped():
+    # 差 1.8 m ÷ 0.005 m/s = 360 s ＋ 10 s = 370 s は max の 200 s に切り詰める
+    rig = Rig(params=make_params(settle_s=0.1),
+              lift=SlowDownLift(height_m=1.3, speed_m_s=10.0, down_speed=0.005))
+    rig.prime()
+    _scan_to_cleaning(rig)
+    assert rig.results()[0].cleanup_limit_s == pytest.approx(200.0)
+
+    rig.advance(0.0)
+    rig.lift._target = None
+    rig.advance(198.0)
+    assert rig.core.state == LocateCore.CLEANING
+    rig.advance(3.0)
+    dones = rig.cleanup_dones()
+    assert len(dones) == 1
+    assert dones[0].lift_restored is False
+
+
+def test_core_cleanup_limit_zero_when_no_restore():
+    rig = Rig()
+    rig.prime()
+    assert rig.accept(goal()) is None
+    run_one_frame(rig)
+    rig.lift.take_over()
+    rig.advance(0.0)
+    result = rig.results()[0]
+    assert result.reason == "human_override"
+    assert result.cleanup_limit_s == 0.0

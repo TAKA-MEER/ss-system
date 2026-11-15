@@ -39,15 +39,18 @@ class LiftState:
     height_m: float | None  # None は読めない（未着・原点前・古い）
     arrived: bool = False
     stopped_reason: str = "none"  # none / ceiling / ceiling_unknown / refused / human
+    up_speed_m_s: float | None = None  # 昇降の速さ [m/s]。分からなければ None
+    down_speed_m_s: float | None = None
 
 
 @dataclass(frozen=True)
 class CameraState:
-    """今のヨー・ピッチの目標角と、再起動した印。"""
+    """今のヨー・ピッチの目標角と、再起動した印・向きが読めるか。"""
 
     yaw_rad: float
     pitch_down_rad: float
     restarted: bool = False
+    pose_known: bool = True
 
 
 @dataclass(frozen=True)
@@ -76,7 +79,7 @@ class LiftRelease:
 
 @dataclass(frozen=True)
 class CameraPoint:
-    yaw_rad: float
+    yaw_rad: float | None  # None はヨーを向けない（ピッチだけ向ける）
     pitch_down_rad: float
 
 
@@ -101,6 +104,7 @@ class SendResult:
     panels: list
     seen_from: list
     seen_span: list
+    cleanup_limit_s: float = 0.0
 
 
 @dataclass(frozen=True)
@@ -148,10 +152,11 @@ class LocateCore:
         self._settle_deadline = None
         self._frame_requested_at = None
         self._awaiting_frame = False
-        self._restart_active = False
 
+        self._origin_pose_known = True
         self._cleanup_reason = None
         self._cleanup_start = None
+        self._cleanup_limit = 0.0
         self._cleanup_done = False
 
     # ------------------------------------------------------------------ 設定
@@ -205,6 +210,7 @@ class LocateCore:
         )
         self._origin_yaw = 0.0 if self._camera is None else float(self._camera.yaw_rad)
         self._origin_pitch = 0.0 if self._camera is None else float(self._camera.pitch_down_rad)
+        self._origin_pose_known = self._camera is None or bool(self._camera.pose_known)
 
         self._started = False
         self._yaws = []
@@ -215,9 +221,9 @@ class LocateCore:
         self._settle_deadline = None
         self._frame_requested_at = None
         self._awaiting_frame = False
-        self._restart_active = False
         self._cleanup_reason = None
         self._cleanup_start = None
+        self._cleanup_limit = 0.0
         self._cleanup_done = False
 
         self.state = self.RUNNING
@@ -248,6 +254,9 @@ class LocateCore:
             if self._origin_height is None:
                 # 受け付けた時点の高さがまだ届いていない。動かさずに終わる
                 return cmds + self._finish("lift_refused", now)
+            if not self._origin_pose_known:
+                # 受け付けた時点でカメラの向きが読めない。何も動かさずに終わる
+                return cmds + self._finish("camera_pose_unknown", now, restore=False)
             cmds.append(LiftGoto(self._scan_goto_height()))
             return cmds
 
@@ -255,6 +264,10 @@ class LocateCore:
             return self._finish("canceled", now)
         if isinstance(event, LiftState) and event.stopped_reason == "human":
             return self._finish("human_override", now)
+
+        if isinstance(event, CameraState) and (event.restarted or not event.pose_known):
+            # 向きが読めない（再起動した）。撮り直さず、ここまでの結果で終える
+            return self._finish("camera_pose_unknown", now)
 
         time_limit = float(self._goal.time_limit_s)
         if now - self._accepted_at >= time_limit - 1e-12:
@@ -266,21 +279,22 @@ class LocateCore:
                 if reason == "refused":
                     return self._finish("lift_refused", now)
                 if reason in ("ceiling", "ceiling_unknown"):
+                    too_low = (
+                        "ceiling_unknown" if reason == "ceiling_unknown" else "camera_too_low"
+                    )
                     if event.height_m is None:
-                        return self._finish("camera_too_low", now)
+                        return self._finish(too_low, now)
                     optical = float(event.height_m) + float(
                         self._get("camera_height_offset_m", 0.0)
                     )
                     if optical < float(self._get("min_camera_height_m", 2.95)):
-                        return self._finish("camera_too_low", now)
+                        return self._finish(too_low, now)
                     return self._begin_scanning(now)
                 if event.arrived:
                     return self._begin_scanning(now)
             return cmds
 
         if self.stage == self.SCANNING:
-            if isinstance(event, CameraState) and event.restarted:
-                return self._on_restart(now)
             if isinstance(event, FrameDone):
                 return self._on_frame(event, now)
             return self._poll_scan(now)
@@ -315,7 +329,6 @@ class LocateCore:
                 self._phase = self._WAITING_FRAME
                 self._frame_requested_at = now
                 self._awaiting_frame = True
-                self._restart_active = False
                 return [RequestFrame()]
             return []
         if self._phase == self._WAITING_FRAME:
@@ -324,16 +337,7 @@ class LocateCore:
                 return self._finish("no_image", now)
         return []
 
-    def _on_restart(self, now):
-        self._restart_active = True
-        if self.stage != self.SCANNING or self._scan_index >= len(self._yaws):
-            return []
-        return self._point_current(now)
-
     def _on_frame(self, event, now):
-        if self._restart_active:
-            # 再起動の印のあいだの画像は捨て、そのヨーを撮り直す
-            return []
         if not event.ok:
             return self._finish("no_image", now)
         if not self._awaiting_frame:
@@ -351,7 +355,21 @@ class LocateCore:
         return self._point_current(now)
 
     # ------------------------------------------------------------------ 終わり
-    def _finish(self, reason, now):
+    def _cleanup_limit_s(self):
+        """後片付けの上限 [s]。距離 ÷ 戻る向きの速さ ＋ 余裕。分からなければ `cleanup_timeout_s`。"""
+        fallback = float(self._get("cleanup_timeout_s", 30.0))
+        height = None if self._lift is None else self._lift.height_m
+        if height is None or self._origin_height is None:
+            return fallback
+        distance = abs(float(height) - self._origin_height)
+        descending = float(height) > self._origin_height
+        speed = self._lift.down_speed_m_s if descending else self._lift.up_speed_m_s
+        if speed is None or not float(speed) > 0.0:
+            return fallback
+        limit = distance / float(speed) + float(self._get("cleanup_margin_s", 10.0))
+        return min(limit, float(self._get("cleanup_limit_max_s", 200.0)))
+
+    def _finish(self, reason, now, restore=True):
         raw_panels, lugs = assemble.assemble(self._obs)
         top_height = float(self._get("top_height_default_m", 2.35))
         tops = [panels.to_panel_top(p, lugs, top_height) for p in raw_panels]
@@ -377,11 +395,15 @@ class LocateCore:
             )
             reason = panels.finish_reason(n_lugs, len(found))
 
-        cmds = [SendResult(reason, found, seen_from, seen_span)]
+        # 戻すものが無い終わり方（人の操作・元の高さが分からない・何も動かしていない）は 0
+        restoring = (
+            restore and reason != "human_override" and self._origin_height is not None
+        )
+        self._cleanup_limit = self._cleanup_limit_s() if restoring else 0.0
+        cmds = [SendResult(reason, found, seen_from, seen_span, self._cleanup_limit)]
         self.stage = None
         self._phase = None
         self._awaiting_frame = False
-        self._restart_active = False
         self._cleanup_reason = reason
         self._cleanup_start = now
         self._cleanup_done = False
@@ -393,17 +415,19 @@ class LocateCore:
             return cmds + [LiftRelease(), CameraRelease(),
                            SendCleanupDone(reason, False)]
 
-        if self._origin_height is None:
-            # 元の高さが分からない（受け付け時の高さが未着）。戻せない
+        if not restoring:
+            # 元の高さが分からない（受け付け時の高さが未着）・何も動かしていない。戻せない
             self.state = self.IDLE
             self._cleanup_done = True
             return cmds + [LiftRelease(), CameraRelease(),
                            SendCleanupDone(reason, False)]
 
         self.state = self.CLEANING
+        # 向きが読めないときはヨーを向けない（角度で向けられない）。ピッチだけ戻す
+        yaw = None if reason == "camera_pose_unknown" else self._origin_yaw
         return cmds + [
             LiftGoto(self._origin_height),
-            CameraPoint(self._origin_yaw, self._origin_pitch),
+            CameraPoint(yaw, self._origin_pitch),
         ]
 
     def _step_cleaning(self, event, now):
@@ -416,8 +440,7 @@ class LocateCore:
             if event.arrived:
                 return self._cleanup_end(True)
 
-        timeout = float(self._get("cleanup_timeout_s", 30.0))
-        if now - self._cleanup_start >= timeout - 1e-12:
+        if now - self._cleanup_start >= self._cleanup_limit - 1e-12:
             return self._cleanup_end(False)
         return []
 
