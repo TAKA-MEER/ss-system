@@ -136,6 +136,7 @@
 | `LIFT_WS_MODULE_PATH` | 定数（`hve_lift.py`） | `/ws/module`。パラメータにしない |
 | `LiftLink.set_speeds` | メソッド | 昇降部の設定から取った上昇・下降の速さを渡す（[-hve.md](DetailedDesign-hve.md) §2.2） |
 | `LIFT_SETTINGS_PATH` | 定数（`hve_lift.py`） | `/api/settings` |
+| `speeds_from_settings` | 関数（`hve_lift.py`） | 昇降部の設定の本文から、`min`〜`max` に収めた上昇・下降の速さを取り出す。取れなければ `None`（`WP-HVE-01` で足した。2026-11-16 に実装管理担当が登録） |
 | `LIFT_MAX_RUN_RETRY` | 定数（`hve_lift_core.py`） | 3。**暫定**（`MAX_RUN` で送り直す回数の上限。[-hve.md](DetailedDesign-hve.md) §4 の 5a） |
 | `LIFT_NAME`・`LIFT_BUSY_LABEL` | 定数（`hve_lift_core.py`） | `ss`・「画像認識で操作中」（2026-11-05 に hve と取り決めた値） |
 | `LiftState.height_m` の `None` | `locate_core.py` | 高さが読めない（[-hve.md](DetailedDesign-hve.md) §3） |
