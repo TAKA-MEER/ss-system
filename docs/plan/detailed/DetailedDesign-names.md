@@ -172,3 +172,27 @@
 | `CameraState.pose_known` | `locate_core.py` | カメラの向きが読めるか。偽のカメラは `restart()` で false にする。本物は `WP-HVE-02` |
 | `SendResult.cleanup_limit_s` | `locate_core.py` | 結果の `cleanup_limit_s` に入れる値 |
 | `INTERFACE_VERSION` | `locator_node.py` | `"2"` |
+
+## 10. hve-system のカメラモジュールとつなぐ（[-hve.md](DetailedDesign-hve.md) §7。案）
+
+相手側の名前（`aim`・`state` のフィールド・応答ヘッダ・止めた理由）は hve の文書が正（§1）。
+
+| 名前 | 種類 | 中身 | パケット |
+| --- | --- | --- | --- |
+| `ss_locator/hve_camera_core.py` | ファイル（純関数） | `CameraLink`・`frame_verdict`・`camera_hello_message` | `WP-HVE-02` |
+| `CameraLink` | クラス | `on_connected`・`on_closed`・`on_state`・`on_command`・`poll`・`camera_state` | `WP-HVE-02` |
+| `frame_verdict` | 関数 | 静止画の応答の扱い `use`／`retry`／`pose_unknown`／`fail` を返す（[-hve.md](DetailedDesign-hve.md) §7.2） | `WP-HVE-02` |
+| `camera_hello_message` | 関数 | カメラモジュールへの `hello`（`ceiling_sensor` を持たない） | `WP-HVE-02` |
+| `CameraState.arrived`・`taken_over`・`failed`・`yaw_speed_rad_s` | `locate_core.py` | 向け終えた・人などに取って代わられた・向けられない・ヨーの速さ（`None` 可）。どれも既定は「起きていない」 | `WP-HVE-02` |
+| `CameraState.yaw_rad`・`CameraPoint.yaw_rad` の `None` | `locate_core.py` | ヨーの向きが読めない・ヨーは動かさない | `WP-HVE-02` |
+| `ss_locator/hve_camera.py` | ファイル（つなぐ） | `HveCamera`（`point`・`release`・`state`・`capture`・`close`） | `WP-HVE-03` |
+| `CAMERA_WS_MODULE_PATH`・`CAMERA_SNAPSHOT_PATH` | 定数（`hve_camera.py`） | `/ws/module`・`/api/snapshot` | `WP-HVE-03` |
+| `tests/test_hve_camera_core.py`・`tests/test_hve_camera.py`・`tests/camera_stub_server.py` | 試験 | 純関数 ／ 小さなサーバを相手にした試験 ／ 試験の中だけで使う小さなサーバ（WebSocket と静止画） | `WP-HVE-02`／`WP-HVE-03` |
+
+| パラメータ | 単位 | 既定 | 出どころ | パケット |
+| --- | --- | --- | --- | --- |
+| `aim_timeout_s` | s | 60 | **暫定（逆算）**（向け終えるのを待つ上限。ヨー半周 180° を既定の 10°/s で 18 s。遅い設定でも足りるように） | `WP-HVE-02` |
+| `camera_host` | — | 空 | 空なら昇降部の `state.modules` の `hve-cam` の `ip`（hve の勧め） | `WP-HVE-03` |
+| `camera_cmd_period_ms` | ms | 100 | 先方（hve が勧める間隔） | `WP-HVE-03` |
+| `camera_state_timeout_ms` | ms | 600 | 2026-11-16 に hve へ答えた値 | `WP-HVE-03` |
+| `snapshot_min_interval_ms` | ms | 200 | 先方（hve の上限。早すぎると 429） | `WP-HVE-03` |

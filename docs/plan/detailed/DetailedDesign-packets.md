@@ -15,7 +15,8 @@
 | `WP-LOC-02` | ノード（ROS 2 の配線） | `WP-LOC-01` | できる |
 | `WP-EST-03` | 位置の大きな誤差の出どころ（調べるだけ） | `WP-EST-02` | できる |
 | `WP-HVE-01` | hve-system の昇降部とつなぐ（2026-11-15 に昇降部の分だけに絞った） | `WP-LOC-02` | 済み（2026-11-16 マージ。実機はまだ） |
-| `WP-HVE-02` | hve-system のカメラモジュールとつなぐ | `WP-HVE-01` | **待ち**（hve の口。[-hve.md](DetailedDesign-hve.md) §6） |
+| `WP-HVE-02` | カメラモジュールとつなぐ（純関数と `locate_core` の直し） | `WP-LOC-03` | できる（2026-11-16 案。相手は試験の中だけ） |
+| `WP-HVE-03` | カメラモジュールとつなぐ（つなぐ層と、ノードの本物の道） | `WP-HVE-02` | できる（試験は小さなサーバが相手。**手での確認は hve の実装待ち**） |
 | `WP-CAL-01` | カメラの内部パラメータの校正 | `WP-ENV-01` | **待ち**（hve のカメラで撮ったチェッカーボードの画像） |
 | `WP-DEMO-01` | 金具認識のリアルタイム表示（本番外の道具） | `WP-DET-01` | できる |
 | `WP-DEMO-02` | 金具認識のリアルタイム表示の起動スクリプト | `WP-DEMO-01` | できる |
@@ -256,9 +257,65 @@ ros2 action send_goal /ss/locate/panels ss_msgs/action/LocatePanels \
 
 `camera_height_offset_m` の 1.9 は、この確認のためだけの値（hve「下端のとき機体は約 1900 mm」から。光学中心の実測値ではない）。
 
-## `WP-HVE-02` hve-system のカメラモジュールとつなぐ（待ち）
+## `WP-HVE-02` カメラモジュールとつなぐ（純関数と `locate_core` の直し）
 
-hve がカメラモジュールの口を書き、本システムが確かめたら書く（見ることは [-hve.md](DetailedDesign-hve.md) §6）。`hve_camera.py`、カメラモジュールが知らせる人の割り込み、`use_fakes` が false の起動を含める。
+**状態: 2026-11-16 案。**`WP-LOC-03` のあとに着手する（同じ `locate_core.py` を触るため）。
+
+**読む節**: [-hve.md](DetailedDesign-hve.md) §7.0〜§7.3、[-core.md](DetailedDesign-core.md) §5、[-names.md](DetailedDesign-names.md) §10。相手の形は hve [DetailedDesign-protocol-ss.md](../../../../hve-system/docs/plan/detailed/DetailedDesign-protocol-ss.md)（読むだけ）。
+
+| やること | 中身 |
+| --- | --- |
+| `hve_camera_core.py` | `CameraLink`・`frame_verdict`・`camera_hello_message`（[-hve.md](DetailedDesign-hve.md) §7.1・§7.2）。WebSocket・HTTP・ROS 2 を読み込まない |
+| `locate_core.py` | [-hve.md](DetailedDesign-hve.md) §7.3 の表 |
+| `fakes.py` | `FakeCamera` が `arrived` を返す。`take_over()`・`fail_aim` を足す（試験用） |
+| `locator_node.py`・`config/locator.yaml` | `aim_timeout_s` |
+
+| 試験 | 確かめること |
+| --- | --- |
+| `test_camera_hello_fields` | `name` が `ss`・`operator` が `auto`・`ceiling_sensor` の欄が無い |
+| `test_aim_converts_angles` | `CameraPoint(radians(90), radians(20))` で `aim` の `yaw_deg` が 90・**`pitch_deg` が −20**。ヨー 190° は −170° に直る |
+| `test_aim_without_yaw` | `yaw_rad` が `None` なら `aim` に `yaw_deg` が無く、`pitch_deg` はある |
+| `test_camera_state_converts_back` | `state` の `pitch_deg` −20・`yaw_deg` 88.5 が、見下ろし 20°・ヨー 88.5° になる。`yaw_deg` が `null` なら `yaw_rad` は `None` |
+| `test_camera_arrived_needs_same_aim` | `press` が違う `ARRIVED` は着いたとみなさない |
+| `test_camera_taken_over` | [-hve.md](DetailedDesign-hve.md) §7.1 の 1 の 3 つそれぞれで `taken_over` になり、次の `poll` から `aim` を返さない。着いたあとでも |
+| `test_camera_pose_unknown` | 2 の 3 つそれぞれで `pose_known` が false |
+| `test_camera_failed` | 3 の名前を 1 つずつと、知らない名前・`state` が古い |
+| `test_frame_verdict_table` | [-hve.md](DetailedDesign-hve.md) §7.2 の表の行を 1 つずつ。**`X-Still-Ms` が `X-Frame-Age-Ms` より小さいと `retry`、等しい・大きいと `use`** |
+| `test_core_settle_after_arrived` | `CameraPoint` のあと、`arrived` が来るまで `RequestFrame` を出さない。`arrived` から `settle_s` たって初めて出す |
+| `test_core_aim_timeout` | `aim_timeout_s` たっても着かなければ `no_image` |
+| `test_core_camera_taken_over` | 走査の途中でカメラを取って代わられると `human_override`。昇降機もカメラも戻さない |
+| `test_core_camera_failed` | `failed` で `no_image`。後片付けはする |
+| `test_core_cleanup_waits_camera` | 昇降機が先に着いても、カメラが着くまで `SendCleanupDone` を出さない |
+| `test_core_cleanup_limit_includes_yaw` | 昇降機の分 20 s・ヨーを戻す分 36 s（180° を 5°/s）・余裕 10 s で `cleanup_limit_s` が 46 |
+
+**変異チェック（実装管理担当が自分で回す）**: (1) ピッチの符号を逆にしない、(2) `arrived` を待たずに `settle_s` を数える、(3) カメラを取って代わられても続ける、(4) 後片付けでカメラを待たない、(5) `X-Still-Ms` の比べ方を逆にする、のそれぞれで試験が落ちること。
+
+## `WP-HVE-03` カメラモジュールとつなぐ（つなぐ層と、ノードの本物の道）
+
+**状態: 2026-11-16 案。**
+
+**読む節**: [-hve.md](DetailedDesign-hve.md) §5・§7.4、[-core.md](DetailedDesign-core.md) §2、[-names.md](DetailedDesign-names.md) §5・§10。
+
+| やること | 中身 |
+| --- | --- |
+| `hve_camera.py` | `HveCamera`（[-hve.md](DetailedDesign-hve.md) §7.4） |
+| `locator_node.py`・`config/locator.yaml` | `use_fakes` が false のときの本物の道（`HveLift`・`HveCamera`・`Detector`・`geometry.camera_T`）。パラメータ 4 つ |
+| `tests/camera_stub_server.py` | 試験の中だけで使う小さなサーバ。`/ws/module` で受けた文を覚えて `state` を送り、`/api/snapshot` で渡された JPEG とヘッダを返す |
+
+| 試験 | 確かめること |
+| --- | --- |
+| `test_hve_camera_hello_first` | 繋ぐと最初に `hello`。繋ぎ直してもまた `hello` から |
+| `test_hve_camera_aim_and_release` | `point` で `aim` が続けて届き、`ARRIVED` で止まる。`release` が届く |
+| `test_hve_camera_capture_uses_headers` | 返った向きが、`state` ではなく応答ヘッダの値（ピッチは符号を逆に） |
+| `test_hve_camera_capture_retries` | 1 回目が 503、2 回目が動いている間のコマ、3 回目が使えるコマのとき、3 回目を返す。取り直しの間隔が `snapshot_min_interval_ms` 以上 |
+| `test_hve_camera_capture_times_out` | 503 が続くと `image_timeout_s` で失敗を返す |
+| `test_hve_camera_host_from_lift` | `camera_host` が空のとき、昇降部の `state.modules` の `hve-cam` の `ip` に繋ぐ |
+| `test_node_real_path_uses_camera_T` | `use_fakes` を false にし、小さなサーバ 2 つ（昇降部・カメラ）と偽の検出器で依頼すると、金具を床に戻すのに使った外部パラメータが、応答のヨー・ピッチと昇降部の高さから `geometry.camera_T` で作ったものと同じ |
+| `test_node_real_path_no_camera` | カメラモジュールに繋がらないと、動かさずに `camera_pose_unknown` |
+
+**受け入れ条件**: `scripts/test.sh` が 0 で終わる。**実装管理担当が手で確かめるのは、hve の偽のカメラモジュールが新しい口に対応してから**（hve の知らせ待ち）。モデルを使う本物の検出は、`model/` を置いた本体で実装管理担当が回す。
+
+**変異チェック（実装管理担当が自分で回す）**: (1) 外部パラメータに `state` の向きを使う、(2) 取り直しの間隔を空けない、(3) `use_fakes` が false でも偽のカメラを使う、のそれぞれで試験が落ちること。
 
 ## `WP-CAL-01` カメラの内部パラメータの校正（待ち）
 

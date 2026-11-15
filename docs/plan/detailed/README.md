@@ -40,10 +40,9 @@
 | [DetailedDesign-core.md](DetailedDesign-core.md) | 中の構成と推定（層・外部パラメータ・走査・返す盤への変換・依頼の流れ） | 2026-11-05 案 |
 | [DetailedDesign-packets.md](DetailedDesign-packets.md) | 作業パケットと受け入れ条件 | 2026-11-05 案 |
 | [DetailedDesign-demo.md](DetailedDesign-demo.md) | 金具認識のリアルタイム表示（本番外の道具。[Spec-demo.md](../spec/Spec-demo.md)） | 2026-11-08 案 |
-| [DetailedDesign-hve.md](DetailedDesign-hve.md) | hve-system とつなぐ部分（昇降部の使い方・止めた理由の対応。カメラモジュールは待ち） | 2026-11-15 案（昇降部だけ） |
+| [DetailedDesign-hve.md](DetailedDesign-hve.md) | hve-system とつなぐ部分（昇降部の使い方・止めた理由の対応。カメラモジュールは待ち） | 昇降部は実装済み（`WP-HVE-01`）。カメラモジュールは 2026-11-16 案（§7） |
 | [DetailedDesign-tester.md](DetailedDesign-tester.md) | 依頼を手で試す道具（テスト用の端末のコマンド。[Spec-tester.md](../spec/Spec-tester.md)） | 2026-11-15 案 |
 
-カメラモジュールとつなぐ部分は、hve の口が決まってから足す。
 
 ---
 

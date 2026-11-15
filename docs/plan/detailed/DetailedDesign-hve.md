@@ -1,7 +1,7 @@
 # hve-system とつなぐ部分（案）
 
 [DetailedDesign.md](DetailedDesign.md) の詳細。本システムが hve-system の昇降部・カメラモジュールとつなぐ所。
-**状態: 2026-11-15 案。2026-11-16 に hve-system の答え（[Spec-open.md](../spec/Spec-open.md) §3）で直した。昇降部の分（§1〜§5）だけ書いた。カメラモジュールの分（§6）は hve の口を待つ。**名前の一覧は [-names.md](DetailedDesign-names.md) §7。決まっていないことは [-open.md](DetailedDesign-open.md) §1。
+**状態: 2026-11-15 案。2026-11-16 に hve-system の答え（[Spec-open.md](../spec/Spec-open.md) §3）で直した。昇降部の分（§1〜§5）は実装済み（`WP-HVE-01`）。カメラモジュールの分は、口を確かめた経緯が §6、本システムの側の設計が §7（2026-11-16 案）。**名前の一覧は [-names.md](DetailedDesign-names.md) §7。決まっていないことは [-open.md](DetailedDesign-open.md) §1。
 
 - 相手の口の正は hve [DetailedDesign-protocol-modules.md](../../../../hve-system/docs/plan/detailed/DetailedDesign-protocol-modules.md)（昇降部。2026-11-05 に本システムが確かめた）と hve [DetailedDesign-names.md](../../../../hve-system/docs/plan/detailed/DetailedDesign-names.md) §3（止めた理由）。**形は写さない。**ここには本システムの使い方だけ書く。
 - 入力は [Spec.md](../spec/Spec.md) §1.1（人が操作に割り込んだとき・見つからない理由）・§1.2（高さの出どころ・撮り方）と [-core.md](DetailedDesign-core.md) §5・§6。
@@ -155,3 +155,81 @@ hve が口を書いたら、本システムが確かめる（[Spec-open.md](../s
 | 0° は機体の前 | hve の spec を「人がカメラを機体の前に合わせて 0° にする」に直した。画面と使い方にも書く | — |
 
 **本システムの側に残る危険**: ヨーの 0° は人が目で合わせる。**1° ずれると 5 m 先の盤が約 9 cm ずれる**（精度の暫定の目標は ±15 cm）。モータの脱調でもずれる。合わせ方と確かめ方は実機で決める（`SS-V2`）。
+
+## 7. カメラモジュールとつなぐ（2026-11-16 案）
+
+相手の口の正は hve [DetailedDesign-protocol-ss.md](../../../../hve-system/docs/plan/detailed/DetailedDesign-protocol-ss.md)（2026-11-16 に本システムが確かめた。**hve の実装はまだ**）。形は写さない。昇降部（§1〜§5）と同じ作りにそろえる。
+
+### 7.0 結論
+
+| 項目 | 案 |
+| --- | --- |
+| 層 | 純関数 `hve_camera_core.py`（`CameraLink`・`frame_verdict`）と、つなぐ `hve_camera.py`（`HveCamera`: WebSocket と静止画の HTTP） |
+| パケット | **2 つに分ける**: `WP-HVE-02`（純関数と、`locate_core` がカメラの「着いた」「取って代わられた」を受ける直し）・`WP-HVE-03`（つなぐ層と、ノードの本物の道） |
+| `locate_core` の直し | (1) **向け終えてから** `settle_s` を数える（今は向ける命令を出した時刻から数える）。(2) カメラを取って代わられたら `human_override`。(3) 後片付けは昇降機とカメラの両方が着くのを待ち、上限にヨーを戻す時間を入れる |
+| 相手がいない間 | 試験の中の小さなサーバ（昇降部と同じやり方）を相手にする。hve の偽のカメラモジュールが新しい口に対応したら、手で確かめる |
+
+### 7.1 `CameraLink`（純関数）
+
+`LiftLink`（§2）と同じ入口を持つ: `on_connected`・`on_closed`・`on_state`・`on_command`・`poll`・`camera_state`。違う所だけ書く。
+
+| 項目 | 決まり |
+| --- | --- |
+| 命令 | `CameraPoint(yaw_rad, pitch_down_rad)` → `press` を 1 増やし、`aim` を `camera_cmd_period_ms` ごとに返す。`CameraRelease` → 命令の途中なら `release` を 1 回 |
+| 角度の変換 | `aim` の `yaw_deg` = `degrees(yaw_rad)` を −180 以上 180 未満に直した値。`pitch_deg` = **`−degrees(pitch_down_rad)`**（hve は見上げが正）。**この変換はここだけ**（[-core.md](DetailedDesign-core.md) §2） |
+| ヨーを動かさない命令 | `CameraPoint` の `yaw_rad` が `None` のとき、`aim` に `yaw_deg` を載せない（ピッチだけ向ける。`camera_pose_unknown` の後片付け） |
+| 着いた | 送った `aim` と同じもの（`state.aim` の `by` が `ss`・`press` が同じ）の `status` が `ARRIVED` |
+| `CameraState.yaw_rad`・`pitch_down_rad` | `state` の `yaw_deg`・`pitch_deg` を上の変換の逆で直す。`yaw_deg` が `null` なら `yaw_rad` は `None` |
+| `CameraState.pose_known` | **`yaw_zeroed` が true・`yaw_deg` が `null` でない・`boot_id` が命令を始めてから変わっていない・`state` が古くない**、の全部が成り立つとき true |
+| `CameraState.yaw_speed_rad_s` | `state` の `yaw_dps` から。無ければ `None` |
+
+**止めた理由**（命令の途中に見たら `aim` を送るのをやめる。上の行が先）:
+
+| # | 見たもの | `CameraState` | 依頼の `reason`（`locate_core` が決める） |
+| --- | --- | --- | --- |
+| 1 | `owner_operator` が `human` ／ 自分の `aim` が `PREEMPTED` ／ 持ち主が `null` でなく `owner_name` が `ss` でない | `taken_over: true` | `human_override` |
+| 2 | `boot_id` が変わった ／ `yaw_zeroed` が false ／ 自分の `aim` が `NOT_ARRIVED` で `reason` が `YAW_UNKNOWN` | `pose_known: false` | `camera_pose_unknown` |
+| 3 | 自分の `aim` が `NOT_ARRIVED` で、上のどれでもない（`TARGET_RANGE`・`IO_LOST`・`CMD_TIMEOUT`・`CMD_STOP`・`OWNER_GONE`・知らない名前）／ 繋がっていない・`state` が古い | `failed: true` | `no_image`（**カメラを向けられない場合の理由が一覧に無いので、`no_image` に入れる案**。[-open.md](DetailedDesign-open.md) §1 の 13） |
+
+1 は、着いて `aim` を送っていない間（撮っている間）も見る。命令が無い間は見ない。
+
+### 7.2 静止画（`frame_verdict`。純関数）
+
+`HveCamera.capture()` が応答を受けるたびに、`frame_verdict(status, headers, boot_id, since_arrived_ms)` で扱いを決める。
+
+| 応答 | 扱い |
+| --- | --- |
+| 200 で、`X-Boot-Id` が命令を始めたときと違う ／ `X-Yaw-Deg` が無い | `pose_unknown`（→ `camera_pose_unknown`） |
+| 200 で、`X-Still-Ms` が `X-Frame-Age-Ms` より小さい（動いている間か、動く前のコマ） | `retry` |
+| 200 で、上のどれでもない | `use`。**推定には `X-Pitch-Deg`・`X-Yaw-Deg` を使う**（`state` の値ではなく。§7.1 の変換で直す） |
+| 429・503 | `retry`（`snapshot_min_interval_ms` 空けて取り直す） |
+| それ以外・繋がらない・JPEG が読めない・1280×720 でない | `fail`（→ `no_image`） |
+
+`retry` は、`RequestFrame` を受けてから `image_timeout_s` を過ぎるまで繰り返す。過ぎたら `fail`。取り直しの間隔は `snapshot_min_interval_ms` より短くしない。
+
+### 7.3 `locate_core` の直し
+
+| 項目 | 今 | 直す |
+| --- | --- | --- |
+| 撮るまでの待ち | `CameraPoint` を出した時刻から `settle_s` | **`CameraState.arrived` を受けた時刻から `settle_s`**（ヨーは 10°/s 前後でゆっくり回るので、命令の時刻からでは回っている途中で撮る）。着くのを待つ上限は `aim_timeout_s`（過ぎたら `no_image`） |
+| 人の割り込み | 昇降部（`LiftState` の `human`）だけ | `CameraState.taken_over` でも `human_override`（どの段でも。後片付け中なら戻すのをやめて手を離す） |
+| カメラを向けられない | — | `CameraState.failed` → `no_image` |
+| 後片付けの終わり | 昇降機が着いたら終わり | **昇降機とカメラの両方が着いたら終わり**（カメラを戻す命令を出さない終わり方では昇降機だけ） |
+| 後片付けの上限 | 昇降機を戻す距離 ÷ 速さ ＋ 余裕（`WP-LOC-03`） | `max(昇降機の分, ヨーを戻す角度 ÷ ヨーの速さ) ＋ cleanup_margin_s`。ヨーの速さが `None` なら昇降機の分だけ |
+| `lift_restored` | 昇降機を戻せたか | 変えない（カメラの向きを戻せたかは含めない。[-locate.md](DetailedDesign-locate.md) §3） |
+
+偽のカメラ（`FakeCamera`）は、向けた次の `state()` で `arrived` を返す（今の試験の時間の流れを大きく変えない）。
+
+### 7.4 `HveCamera`（つなぐ）と `locator_node`（`WP-HVE-03`）
+
+| 項目 | 決まり |
+| --- | --- |
+| 形 | `HveLift`（§5）と同じ: スレッド 1 本・繋ぎ直し・`close()`。`point(yaw_rad, pitch_down_rad)`・`release()`・`state()`・`capture()` を持つ（`FakeCamera` と差し替えられる形） |
+| 繋ぐ先 | `ws://<camera_host>/ws/module` と `http://<camera_host>/api/snapshot?by=ss`。**`camera_host` が空なら、昇降部の `state.modules` にある `hve-cam` の `ip` を使う**（hve の勧め）。どちらも無ければ繋がない（`pose_known: false`） |
+| `capture()` | 静止画を取り、§7.2 で扱いを決め、`use` なら JPEG を OpenCV で読んで `{image, yaw_rad, pitch_down_rad}` を返す。ノードの周期を止めないよう、別スレッドで取り、結果を出来事（`FrameDone`）として渡す |
+| ノードの本物の道 | `use_fakes` が false のとき: 昇降機は `HveLift`、カメラは `HveCamera`、検出は `Detector`（学習済みモデル）。外部パラメータは `geometry.camera_T(昇降部の高さ ＋ camera_height_offset_m, 応答のヨー, 応答のピッチ, 取付の位置)`。**`use_fakes` が false で起動時に止まるのをやめる** |
+| 受け付けの前 | 昇降部・カメラモジュールの `state` がまだ来ていなければ、今までどおり動かさずに返す（昇降部は `lift_refused`、カメラは `camera_pose_unknown`） |
+
+**ピッチの可動範囲**: `scan_pitch_down_deg` が hve の `state` の範囲の外でも、起動は止めない。`aim` が `TARGET_RANGE` で返り、`no_image` になる（ログに hve の理由の名前を出す）。
+
+**本システムが持たないもの**: ヨーの原点合わせ（人だけ）・ズーム・設定の変更。カメラモジュールへは `ceiling_sensor` を名乗らない。
