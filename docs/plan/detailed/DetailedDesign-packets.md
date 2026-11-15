@@ -14,7 +14,8 @@
 | `WP-LOC-01` | 依頼の流れ（純関数）と偽の hve | `WP-EST-02`・`WP-DET-01` | できる |
 | `WP-LOC-02` | ノード（ROS 2 の配線） | `WP-LOC-01` | できる |
 | `WP-EST-03` | 位置の大きな誤差の出どころ（調べるだけ） | `WP-EST-02` | できる |
-| `WP-HVE-01` | hve-system とつなぐ | `WP-LOC-02` | **待ち**（[-core.md](DetailedDesign-core.md) §6） |
+| `WP-HVE-01` | hve-system の昇降部とつなぐ（2026-11-15 に昇降部の分だけに絞った） | `WP-LOC-02` | **ユーザーの確認待ち**（偽の昇降部を相手に作ることはできる。[-open.md](DetailedDesign-open.md) §1 の 7） |
+| `WP-HVE-02` | hve-system のカメラモジュールとつなぐ | `WP-HVE-01` | **待ち**（hve の口。[-hve.md](DetailedDesign-hve.md) §6） |
 | `WP-CAL-01` | カメラの内部パラメータの校正 | `WP-ENV-01` | **待ち**（hve のカメラで撮ったチェッカーボードの画像） |
 | `WP-DEMO-01` | 金具認識のリアルタイム表示（本番外の道具） | `WP-DET-01` | できる |
 | `WP-DEMO-02` | 金具認識のリアルタイム表示の起動スクリプト | `WP-DEMO-01` | できる |
@@ -192,9 +193,66 @@ ros2 topic echo /ss/locate/cleanup_done
 
 `tools/check_std.py` の結果のうち、位置の誤差 ÷ `pos_std_m` が 2 を超える盤を、金具の数（2／3／4）・対角か・正面が分かるか・カメラからの距離・誤差の向き（基準の辺に沿う／直交）で分けて数え、`docs/plan/source/std-check.md` に足す。**式は変えない。**結果を見て、確からしさの式を直すかを決める（[-open.md](DetailedDesign-open.md) §1 の 5）。
 
-## `WP-HVE-01` hve-system とつなぐ（待ち）
+## `WP-HVE-01` hve-system の昇降部とつなぐ
 
-[-core.md](DetailedDesign-core.md) §6 の待ちが解けたら書く。hve の止めた理由と `reason` の対応表を含める。
+**状態: 2026-11-15 案。着手はユーザーの確認待ち**（[-names.md](DetailedDesign-names.md) §1 の「hve が実機に入れたと知らせるまで実装しない」を、偽の昇降部が相手なら解いてよいか）。**このパケットでは実機の昇降部に繋がない。**
+
+**読む節**: [-hve.md](DetailedDesign-hve.md) §0〜§5、[-core.md](DetailedDesign-core.md) §5、[-names.md](DetailedDesign-names.md) §5・§7。相手の形は hve [DetailedDesign-protocol-modules.md](../../../../hve-system/docs/plan/detailed/DetailedDesign-protocol-modules.md) §1〜§3 と hve [DetailedDesign-protocol.md](../../../../hve-system/docs/plan/detailed/DetailedDesign-protocol.md) §2.2（`state` の今の欄）。**hve のリポジトリは読むだけで、書き換えない。**
+
+| やること | 中身 |
+| --- | --- |
+| `hve_lift_core.py` | `LiftLink`・`hello_message`（[-hve.md](DetailedDesign-hve.md) §2〜§4）。WebSocket・ROS 2 を読み込まない |
+| `hve_lift.py` | `HveLift`（[-hve.md](DetailedDesign-hve.md) §5） |
+| `locate_core.py` | `LiftState.height_m` の `None` を受ける（[-hve.md](DetailedDesign-hve.md) §3）。ほかは変えない |
+| `locator_node.py`・`config/locator.yaml` | [-names.md](DetailedDesign-names.md) §7 のパラメータ 5 つと、`hve_lift` が true のときの差し替え |
+| Docker | `docker/Dockerfile` に `websockets` を足す。足した版をパケットの報告に書く |
+
+**受け入れ条件**: `docker run --rm -v "$PWD":/ws ss-system:dev bash scripts/test.sh` が 0 で終わる（今までの試験も通る）。**実時間で待つ試験は、小さなサーバを相手にする `test_hve_lift.py` だけにし、純関数の試験は時刻を引数で渡す。**
+
+| 試験 | 確かめること |
+| --- | --- |
+| `test_hello_fields` | `hello` が [-hve.md](DetailedDesign-hve.md) §2.1 の値で、`busy_label` が UTF-8 で 48 バイト以下。`ceiling_sensor` は false |
+| `test_goto_repeats_same_press` | `LiftGoto` のあと、`poll` が `lift_cmd_period_ms` ごとに同じ `press`・`target_mm`・`speed` の `goto` を返し、`ceiling` を持たない。周期の途中では返さない |
+| `test_new_goto_increments_press` | 2 つ目の `LiftGoto` で `press` が増える。繋ぎ直しても戻らない |
+| `test_arrived_needs_same_goto` | `state.goto` が `ARRIVED` でも、`by`・`press`・`target_mm` のどれかが違えば `arrived` は false。**前の `press` で着いたままの `state` を、次の `LiftGoto` の直後に渡しても false** |
+| `test_stops_sending_after_arrived` | 着いたあと `poll` は `goto` を返さない |
+| `test_human_takeover_stops_sending` | [-hve.md](DetailedDesign-hve.md) §4 の 1・2・3 のそれぞれで `stopped_reason` が `human` になり、**その次の `poll` から `goto` を返さない**。3 は着いたあと（送っていない間）でも |
+| `test_idle_ignores_owner` | 命令が無い間は、持ち主が人でも `stopped_reason` は `none` |
+| `test_reason_table` | [-hve.md](DetailedDesign-hve.md) §4 の 4・5・6 の名前を 1 つずつ。知らない名前は `refused`。上昇の `BOTTOM` は `refused` |
+| `test_height_unknown` | `height_ok` が false・`state` をまだ受けていない・`lift_state_timeout_ms` より古い、のそれぞれで `height_m` が `None` |
+| `test_stale_requests_reconnect` | 最後の `state` から `lift_state_timeout_ms` を過ぎると `poll` が「繋ぎ直す」を返し、命令の途中なら `refused`。繋ぎ直して新しい `state` が来ても、その命令の `goto` は返さない |
+| `test_release_once` | `LiftRelease` で `release` が 1 回だけ出て、`press` は最後の `goto` と同じ。命令が無ければ出ない |
+| `test_core_height_none_refused` | `locate_core`: 受け付けのとき `height_m` が `None` なら、`LiftGoto` を出さずに `lift_refused`・`lift_restored: false` |
+| `test_hve_lift_hello_first` | 小さなサーバに繋ぐと、最初に届く文が `hello`。切って繋ぎ直させても、また `hello` から |
+| `test_hve_lift_goto_and_release` | `apply(LiftGoto)` で `goto` が続けて届き、サーバが `ARRIVED` を送ると `advance` が `arrived` を返して `goto` が止まる。`apply(LiftRelease)` で `release` が届く |
+| `test_hve_lift_reconnects_when_silent` | サーバが `state` を送るのをやめると、`HveLift` が自分で閉じて繋ぎ直す |
+| `test_node_uses_hve_lift` | `use_fakes`・`hve_lift` を true にしてノードを起こし、小さなサーバを昇降部に見立てて依頼すると、`goto` が届き、サーバが人の持ち主を送ると結果が `human_override` で、**そのあと `goto` が届かない** |
+
+**変異チェック（実装管理担当が自分で回す）**: (1) `hve_lift_core.py` で `press` を照らさずに `ARRIVED` を着いたとみなす、(2) 人の割り込みのあとも `goto` を返し続ける、(3) [-hve.md](DetailedDesign-hve.md) §4 の 3 を `refused` にする、(4) `hve_lift.py` で `poll` が返した文を送らない、(5) `locator_node.py` で `hve_lift` が true でも `FakeLift` を使う、のそれぞれで試験が落ちること。
+
+**実装管理担当が手で確かめる**（hve の偽の昇降部を相手に。hve の道具の動かし方は hve の `docs/使い方.md` に従う）:
+
+```bash
+# hve のリポジトリで偽の昇降部を起こす（ポートは例）
+python tools/fake_lift_server.py --port 18080
+# ss のコンテナ（--network host）の中で
+ros2 run ss_locator locator_node --ros-args -p use_fakes:=true -p hve_lift:=true \
+  -p lift_host:=127.0.0.1:18080 -p camera_height_offset_m:=1.9
+ros2 action send_goal /ss/locate/panels ss_msgs/action/LocatePanels \
+  "{azimuth_from_rad: -3.14, azimuth_span_rad: 6.28, max_distance_m: 0.0, time_limit_s: 120.0}" --feedback
+```
+
+| 場面 | 見ること |
+| --- | --- |
+| 天井の値の出どころが繋がっていない | 昇降機が上がらず、結果が `camera_too_low`（偽の昇降部の画面に「画像認識で操作中」が出る） |
+| hve の偽のカメラモジュールを繋いだ | 上がって `completed`、終わると元の高さへ戻り、`cleanup_done` の `lift_restored` が true |
+| 上がっている途中に、偽の昇降部の画面から人が操作した | すぐ `goto` が止まり、結果が `human_override`、昇降機は戻らない |
+
+`camera_height_offset_m` の 1.9 は、この確認のためだけの値（hve「下端のとき機体は約 1900 mm」から。光学中心の実測値ではない）。
+
+## `WP-HVE-02` hve-system のカメラモジュールとつなぐ（待ち）
+
+hve がカメラモジュールの口を書き、本システムが確かめたら書く（見ることは [-hve.md](DetailedDesign-hve.md) §6）。`hve_camera.py`、カメラモジュールが知らせる人の割り込み、`use_fakes` が false の起動を含める。
 
 ## `WP-CAL-01` カメラの内部パラメータの校正（待ち）
 

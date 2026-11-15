@@ -27,8 +27,8 @@
 
 | 相手 | 出どころ | 状態 |
 | --- | --- | --- |
-| hve-system（昇降部） | hve [DetailedDesign-protocol-modules.md](../../../../hve-system/docs/plan/detailed/DetailedDesign-protocol-modules.md) §1〜§4。本システムは名前 `ss`・`operator: auto`・`ceiling_sensor: false`・`busy_label`「画像認識で操作中」で繋ぐ | 2026-11-05 本システムが確かめた。**hve が実機に入れたと知らせるまで、この名前で実装しない・今の昇降部で上昇させない** |
-| hve-system（カメラモジュール） | hve がこれから書く（昇降部の口のあと） | 未着 |
+| hve-system（昇降部） | hve [DetailedDesign-protocol-modules.md](../../../../hve-system/docs/plan/detailed/DetailedDesign-protocol-modules.md) §1〜§4。本システムは名前 `ss`・`operator: auto`・`ceiling_sensor: false`・`busy_label`「画像認識で操作中」で繋ぐ | 2026-11-05 本システムが確かめた。**hve が実機に入れたと知らせるまで、この名前で実装しない・今の昇降部で上昇させない**。2026-11-15 時点: hve の `main` に入った（実機はまだ。`goto` のファームは hve `WP-LIFT-14` で未着手）。本システムの使い方は [-hve.md](DetailedDesign-hve.md)・§7（案）。**偽の昇降部を相手に実装を始めてよいかは、ユーザーの確認待ち**（[-open.md](DetailedDesign-open.md) §1 の 7） |
+| hve-system（カメラモジュール） | hve がこれから書く（昇降部の口のあと。hve [ImplementationPlan.md](../../../../hve-system/docs/plan/ImplementationPlan.md) §6 の行 8a） | 未着（2026-11-15 時点で未着手） |
 
 ## 2. パッケージ
 
@@ -75,7 +75,7 @@
 | `docker/Dockerfile` | 開発・実機で使うイメージ `ss-system:dev`（`ros:humble` が元） | 入れる |
 | `scripts/test.sh` | コンテナの中で `colcon build` と `pytest` | 入れる |
 | `tools/` | `make_proto_fixture.py`（試作の環境で回す）・`measure_cpu_time.py`・`check_std.py` | 入れる |
-| `ss_ws/src/ss_locator/ss_locator/` | `geometry.py`・`assemble.py`・`panels.py`・`scan_plan.py`・`locate_core.py`・`detector.py`・`fakes.py`・`locator_node.py`・（待ち）`hve_lift.py`・`hve_camera.py`（[-core.md](DetailedDesign-core.md) §1） | 入れる |
+| `ss_ws/src/ss_locator/ss_locator/` | `geometry.py`・`assemble.py`・`panels.py`・`scan_plan.py`・`locate_core.py`・`detector.py`・`fakes.py`・`locator_node.py`・（案）`hve_lift_core.py`・`hve_lift.py`（§7）・（待ち）`hve_camera.py`（[-core.md](DetailedDesign-core.md) §1） | 入れる |
 | `ss_ws/src/ss_locator/config/locator.yaml` | §3・§5 のパラメータの既定値（ROS 2 のパラメータファイル。ノード名 `locator_node` の下）。純関数の層はこれを読まず、値を引数で受ける | 入れる |
 | `ss_ws/src/ss_locator/tests/fixtures/proto_9265d2d.json` | 試作の出力（回帰試験の正解。`WP-EST-01`） | 入れる |
 | `docs/plan/source/cpu-time.md`・`std-check.md` | 測った結果（`WP-DET-01`・`WP-EST-02`） | 入れる |
@@ -121,3 +121,26 @@
 | `fps`・`in_fps`・`src_size` | `show` に渡す結果の鍵 | [-demo.md](DetailedDesign-demo.md) §3 |
 
 パラメータは新しく作らない。既定値は §5 の `model_file`・`model_sha256`・`detect_imgsz`・`detect_conf` を `locator.yaml` から読む。
+
+## 7. hve-system の昇降部とつなぐ（[-hve.md](DetailedDesign-hve.md)。案）
+
+相手側の名前（`hello`・`goto`・`release`・`state` のフィールド・止めた理由）は hve の文書が正（§1）。ここには本システムの側の名前だけ載せる。
+
+| 名前 | 種類 | 中身 |
+| --- | --- | --- |
+| `ss_locator/hve_lift_core.py` | ファイル（純関数） | `LiftLink`・`hello_message` |
+| `LiftLink` | クラス | `on_connected`・`on_closed`・`on_state`・`on_command`・`poll`・`lift_state`（[-hve.md](DetailedDesign-hve.md) §2） |
+| `hello_message` | 関数 | `hello` の dict を返す（[-hve.md](DetailedDesign-hve.md) §2.1） |
+| `ss_locator/hve_lift.py` | ファイル（つなぐ） | `HveLift`（`apply`・`advance`・`close`。[-hve.md](DetailedDesign-hve.md) §5） |
+| `LIFT_WS_MODULE_PATH` | 定数（`hve_lift.py`） | `/ws/module`。パラメータにしない |
+| `LIFT_NAME`・`LIFT_BUSY_LABEL` | 定数（`hve_lift_core.py`） | `ss`・「画像認識で操作中」（2026-11-05 に hve と取り決めた値） |
+| `LiftState.height_m` の `None` | `locate_core.py` | 高さが読めない（[-hve.md](DetailedDesign-hve.md) §3） |
+| `tests/test_hve_lift_core.py`・`tests/test_hve_lift.py`・`tests/lift_stub_server.py` | 試験 | `WP-HVE-01`。`lift_stub_server.py` は試験の中だけで使う小さな WebSocket のサーバ（受けた文を覚え、渡された `state` を送る） |
+
+| パラメータ | 単位 | 既定 | 出どころ |
+| --- | --- | --- | --- |
+| `hve_lift` | — | false | 昇降機だけ hve の口を使う。`use_fakes` が true のときだけ意味を持つ（カメラが本物になる `WP-HVE-02` までの確認用） |
+| `lift_host` | — | `hve-lift.local` | 先方（hve [DetailedDesign-protocol-modules.md](../../../../hve-system/docs/plan/detailed/DetailedDesign-protocol-modules.md) §1.4）。`host` か `host:port`。コンテナの中から名前が引けなければ IP を与える（**実機で確かめる**） |
+| `lift_speed_mm_s` | mm/s | 40 | **暫定**（hve の文書の例の値。昇降部の設定の範囲に入る値を実機で決める。[-open.md](DetailedDesign-open.md) §1 の 9） |
+| `lift_cmd_period_ms` | ms | 100 | 先方（hve が勧める間隔。2026-11-05 に hve へ答えた値） |
+| `lift_state_timeout_ms` | ms | 600 | 2026-11-05 に hve へ答えた値（`state` の配信は hve の仮値で 100 ms ごと） |

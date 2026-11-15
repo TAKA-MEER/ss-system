@@ -2,7 +2,7 @@
 
 [仕様書](../spec/Spec.md) を実装できる形に落とす。読み方は [README.md](README.md)。
 
-> **2026-11-05: 盤の位置を探す口（[-locate.md](DetailedDesign-locate.md)）の案を書き、同日 fk-system が確かめた。中の構成（[-core.md](DetailedDesign-core.md)）と作業パケット（[-packets.md](DetailedDesign-packets.md)）の案を書いた。**hve-system とつなぐ部分は待ち。
+> **2026-11-05: 盤の位置を探す口（[-locate.md](DetailedDesign-locate.md)）の案を書き、同日 fk-system が確かめた。中の構成（[-core.md](DetailedDesign-core.md)）と作業パケット（[-packets.md](DetailedDesign-packets.md)）の案を書いた。****2026-11-15: hve-system の昇降部とつなぐ部分（[-hve.md](DetailedDesign-hve.md)）の案を書いた。**カメラモジュールとつなぐ部分は hve の口を待つ。
 
 ---
 
@@ -19,10 +19,10 @@
 | 項目 | 案 | 出どころ |
 | --- | --- | --- |
 | 依頼する側との口 | ROS 2 のアクション＋後片付けの完了＋生存と状態（[-locate.md](DetailedDesign-locate.md)。**案**） | [Spec.md](../spec/Spec.md) §1.1・§1.2 |
-| hve-system との口 | hve が書いたもの（[-names.md](DetailedDesign-names.md) §1） | hve `DetailedDesign-protocol-modules.md` |
+| hve-system との口 | hve が書いたもの（[-names.md](DetailedDesign-names.md) §1）。本システムの使い方は [-hve.md](DetailedDesign-hve.md)（昇降部は 2026-11-15 **案**。カメラモジュールは待ち） | hve `DetailedDesign-protocol-modules.md` |
 | 中の構成 | 純関数の層（幾何・組み立て・変換・走査・状態遷移）とつなぐ層（ROS 2・検出器・hve）。先行試作の組み立てを写し、外部パラメータを機体の昇降機・ヨー・ピッチから作る（[-core.md](DetailedDesign-core.md)。**案**） | [Spec.md](../spec/Spec.md) §1.2 |
 
 ## 3. 段階と作業パケット
 
 [-packets.md](DetailedDesign-packets.md)（**案**）。th-system と同じく**各パケットの終わりに必ず「動くもの」が残る**ように切った。
-`WP-ENV-01` → `WP-EST-01`・`WP-DET-01` → `WP-EST-02` → `WP-LOC-01` は今すぐ着手できる。`WP-HVE-01`・`WP-CAL-01` は待ち。本番外の道具 `WP-DEMO-01`（金具認識のリアルタイム表示。[-demo.md](DetailedDesign-demo.md)。2026-11-08 案）は今すぐ着手できる。状態は [ImplementationPlan.md](../ImplementationPlan.md) §4。
+`WP-ENV-01` → `WP-EST-01`・`WP-DET-01` → `WP-EST-02` → `WP-LOC-01` は今すぐ着手できる。`WP-HVE-01`（昇降部。2026-11-15 案）は着手の確認待ち、`WP-HVE-02`（カメラモジュール）・`WP-CAL-01` は待ち。本番外の道具 `WP-DEMO-01`（金具認識のリアルタイム表示。[-demo.md](DetailedDesign-demo.md)。2026-11-08 案）は今すぐ着手できる。状態は [ImplementationPlan.md](../ImplementationPlan.md) §4。

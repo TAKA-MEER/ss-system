@@ -11,10 +11,10 @@
 
 | フォルダ・ファイル | 役割 | 現状 |
 | --- | --- | --- |
-| [`spec/`](spec/README.md) | **仕様書＝完成形の正本。**詳細設計・実装計画はここを入力にして書く | **骨格のみ（2026-10-31〜）** |
-| [`detailed/`](detailed/README.md) | **詳細設計書。**ノード名・トピック名・ピン・作業パケット | 空（spec の後） |
+| [`spec/`](spec/README.md) | **仕様書＝完成形の正本。**詳細設計・実装計画はここを入力にして書く | 本体の各節が埋まった（2026-11-05）。残りは `spec/Spec-open.md` §2 |
+| [`detailed/`](detailed/README.md) | **詳細設計書。**ノード名・トピック名・ピン・作業パケット | 口・中の構成・作業パケット・hve の昇降部とつなぐ部分の案がある |
 | [`source/`](source/README.md) | spec に統合する前の原典・先行試作・関連リポジトリへの参照 | 参照専用 |
-| [`ImplementationPlan.md`](ImplementationPlan.md) | 実装の進め方と進み具合 | 進め方（§2）のみ確定 |
+| [`ImplementationPlan.md`](ImplementationPlan.md) | 実装の進め方と進み具合 | 進み具合は §1・§4・§6 |
 | [`EXCEPTION-LEDGER.md`](EXCEPTION-LEDGER.md) | デモ特例で省略・バイパスした事項の台帳 | 空 |
 
 新しく読むならまず `spec/README.md`。

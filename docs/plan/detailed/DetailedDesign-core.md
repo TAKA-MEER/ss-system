@@ -31,7 +31,8 @@
 | 純関数 | `scan_plan.py` | 方向の範囲 → 撮るヨーの並び、撮った画像 → 見た方向の範囲、角度の正規化（§3） | 新しく書く |
 | 純関数 | `locate_core.py` | 依頼の受け付けの判定、依頼の状態遷移（§5）。**時刻と出来事を受けて、次にやることを返すだけ** | 新しく書く（th-system `follow_planner_core.py` と同じ二層構造） |
 | つなぐ | `detector.py` | 学習済みモデルの読み込み（SHA-256 を照合）と検出。画像 → キーポイントと確信度 | `eval_lug.py` の推論の呼び方に揃える |
-| つなぐ | `hve_lift.py`・`hve_camera.py` | hve-system の昇降部・カメラモジュールとの口 | **hve の口が実機に入る・書かれるまで作らない**（§6） |
+| 純関数・つなぐ | `hve_lift_core.py`・`hve_lift.py` | hve-system の昇降部との口（[-hve.md](DetailedDesign-hve.md) §1〜§5。2026-11-15 案） | 新しく書く |
+| つなぐ | `hve_camera.py` | hve-system のカメラモジュールとの口 | **hve の口が書かれるまで作らない**（§6） |
 | つなぐ | `fakes.py` | 試験用の偽の昇降機・カメラ（合成データの画像とカメラの姿勢を返す） | 新しく書く |
 | つなぐ | `locator_node.py` | ROS 2 のノード。アクション・トピック（[-locate.md](DetailedDesign-locate.md)）と `locate_core` の配線 | 新しく書く |
 
@@ -119,10 +120,10 @@
 
 | もの | 待っていること | それまで |
 | --- | --- | --- |
-| 昇降部（`hve_lift.py`） | hve が実機に入れたと知らせる（[-names.md](DetailedDesign-names.md) §1）。名前 `ss`・自動・距離計なし・「画像認識で操作中」で繋ぐ。`goto` で高さを合わせる | `fakes.py` の偽の昇降機 |
+| 昇降部（`hve_lift.py`） | hve が実機に入れたと知らせる（[-names.md](DetailedDesign-names.md) §1）。名前 `ss`・自動・距離計なし・「画像認識で操作中」で繋ぐ。`goto` で高さを合わせる。**設計は [-hve.md](DetailedDesign-hve.md)（2026-11-15 案）。**hve の `main` には入ったが、`goto` のファームと実機への書き込みがまだ | `fakes.py` の偽の昇降機。hve の偽の昇降部を相手に作って確かめることはできる（`WP-HVE-01`） |
 | カメラモジュール（`hve_camera.py`） | hve が口を書き、本システムが確かめる（静止画・名乗り・ピッチの目標角と再起動・ヨーの欄） | `fakes.py` の偽のカメラ |
 | ヨーの向き | hve `H-A11` | 偽のカメラが返す値 |
 
-hve-system の止めた理由と本システムの `reason`（`lift_refused`・`camera_too_low`・`human_override`）の対応表は、口が決まってから `WP-HVE-01` で書く。
+hve-system の昇降部の止めた理由と本システムの `reason`（`lift_refused`・`camera_too_low`・`human_override`）の対応表は [-hve.md](DetailedDesign-hve.md) §4（2026-11-15 案）。
 
-**`WP-HVE-01` で気をつけること**（`WP-LOC-01` の検証で気づいた）: `locate_core` は昇降部の「目標に着いた」をそのまま信じて次へ進む。目標を変えた直後に、前の目標で着いたままの状態が届くと、後片付けで戻り切る前に手を離す。本物の口では、着いたかを**今の目標との差**でも確かめる（幅は hve `H-M6`）。人の割り込みは今は昇降部からだけ受けている。カメラモジュールが知らせる場合の扱いも、カメラモジュールの口と一緒に決める。
+**`WP-HVE-01` で気をつけること**（`WP-LOC-01` の検証で気づいた）: `locate_core` は昇降部の「目標に着いた」をそのまま信じて次へ進む。目標を変えた直後に、前の目標で着いたままの状態が届くと、後片付けで戻り切る前に手を離す。**本物の口では、着いたかを、送った `goto` の `press` と目標の高さまで照らして確かめる**（[-hve.md](DetailedDesign-hve.md) §3。hve が着いたとみなす幅は hve `H-M6`）。人の割り込みは今は昇降部からだけ受けている。カメラモジュールが知らせる場合の扱いは、カメラモジュールの口と一緒に決める（`WP-HVE-02`）。
