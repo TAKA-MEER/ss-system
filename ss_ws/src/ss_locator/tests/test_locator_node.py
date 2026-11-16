@@ -4,6 +4,8 @@ import threading
 import time
 from pathlib import Path
 
+import cv2
+import numpy as np
 import pytest
 import rclpy
 from rclpy.action import ActionClient
@@ -11,7 +13,9 @@ from rclpy.executors import MultiThreadedExecutor
 from rclpy.parameter import Parameter
 from rclpy.qos import DurabilityPolicy, QoSProfile, ReliabilityPolicy
 
+from camera_stub_server import CameraStubServer
 from lift_stub_server import LiftStubServer
+from ss_locator import geometry, locator_node
 from ss_locator.locator_node import LocatorNode
 from ss_msgs.action import LocatePanels
 from ss_msgs.msg import CleanupDone, LocatorStatus
@@ -441,3 +445,252 @@ def test_node_camera_taken_over():
         assert cleanup.lift_restored is False
     finally:
         rig.close()
+
+
+# ---------------------------------------------------------------- 本物の道（use_fakes: false）
+class _NoLugDetector:
+    """学習済みモデルを読まない偽の検出器（`locator_node.Detector` の差し替え先）。"""
+
+    def __init__(self, model_file, model_sha256, imgsz, conf):
+        pass
+
+    def detect(self, image):
+        return np.zeros((0, 4, 2), np.float32), np.zeros((0,), np.float32)
+
+
+REAL_LIFT_STATE = {
+    "t": "state",
+    "height_mm": 0,
+    "height_ok": True,
+    "owner": None,
+    "owner_name": None,
+    "owner_operator": None,
+    "goto": None,
+}
+REAL_LIFT_SETTINGS = {
+    "lift_up": {"min": 10, "max": 60, "init": 30},
+    "lift_down": {"min": 10, "max": 60, "init": 20},
+}
+
+
+def _jpeg():
+    ok, encoded = cv2.imencode(".jpg", np.full((720, 1280, 3), 128, np.uint8))
+    assert ok
+    return encoded.tobytes()
+
+
+def _real_parameters(lift_server, camera_host, **overrides):
+    values = dict(
+        use_fakes=False,
+        lift_host="127.0.0.1:%d" % lift_server.port,
+        lift_cmd_period_ms=50,
+        lift_state_timeout_ms=500,
+        camera_host=camera_host,
+        camera_cmd_period_ms=50,
+        camera_state_timeout_ms=500,
+        snapshot_min_interval_ms=100,
+        scan_camera_height_m=0.2,
+        camera_height_offset_m=0.05,
+        camera_mount_x_m=0.1,
+        camera_mount_y_m=-0.2,
+        camera_forward_offset_m=0.03,
+    )
+    values.update(overrides)
+    return parameters(**values)
+
+
+def _start_lift_server():
+    server = LiftStubServer()
+    server.start()
+    server.set_settings(REAL_LIFT_SETTINGS)
+    server.set_auto_state(REAL_LIFT_STATE)
+    return server
+
+
+def test_node_real_path_uses_camera_T(monkeypatch):
+    monkeypatch.setattr(locator_node, "Detector", _NoLugDetector)
+    calls = []
+
+    def spy_lift(keypoints, confidences, camera, view, top_height):
+        calls.append(camera)
+        return []
+
+    monkeypatch.setattr(locator_node.assemble, "lift", spy_lift)
+
+    lift_server = _start_lift_server()
+    camera_server = CameraStubServer()
+    camera_server.start()
+    # state の向き（yaw 10°・pitch -20°）と、応答ヘッダの向き（yaw 30°・pitch -35°）を変えておく
+    camera_server.set_auto_state(
+        {
+            "t": "state",
+            "seq": 1,
+            "boot_id": "boot-1",
+            "pitch_deg": -20.0,
+            "yaw_deg": 10.0,
+            "yaw_zeroed": True,
+            "yaw_dps": 10.0,
+            "owner": None,
+            "owner_name": None,
+            "owner_operator": None,
+            "aim": None,
+        },
+        arrive_on_aim=True,
+    )
+    camera_server.set_snapshots(
+        [
+            (
+                200,
+                {
+                    "X-Boot-Id": "boot-1",
+                    "X-Yaw-Deg": 30.0,
+                    "X-Pitch-Deg": -35.0,
+                    "X-Still-Ms": 1000,
+                    "X-Frame-Age-Ms": 10,
+                },
+                _jpeg(),
+            )
+        ]
+    )
+    rig = Rig(
+        parameter_overrides=_real_parameters(
+            lift_server, "127.0.0.1:%d" % camera_server.port
+        )
+    )
+    try:
+        rig.wait_until(
+            lambda: rig.node._core._lift is not None
+            and rig.node._core._lift.height_m is not None
+            and rig.node._core._camera is not None
+            and rig.node._core._camera.pose_known,
+            10.0,
+            "昇降部・カメラの状態が届かない",
+        )
+        goal_handle = rig.send_goal(azimuth_from_rad=0.0, azimuth_span_rad=0.3)
+        assert goal_handle.accepted
+
+        def gotos():
+            return [m for m in lift_server.messages if m.get("t") == "goto"]
+
+        rig.wait_until(lambda: gotos(), 10.0, "goto が届かない")
+        target_mm = gotos()[0]["target_mm"]
+        assert target_mm == 150  # 0.2 - camera_height_offset_m
+        arrived = dict(REAL_LIFT_STATE)
+        arrived["height_mm"] = target_mm
+        arrived["goto"] = {
+            "by": "ss", "press": gotos()[0]["press"], "target_mm": target_mm,
+            "status": "ARRIVED", "reason": "NONE",
+        }
+        lift_server.set_auto_state(arrived)
+
+        result = rig.get_result(goal_handle, timeout=20.0)
+        assert calls, "金具を床に戻す処理が呼ばれない"
+        K, dist, T = calls[0]
+        expected = geometry.camera_T(
+            0.15 + 0.05, math.radians(30.0), math.radians(35.0), 0.1, -0.2, 0.03
+        )
+        assert np.allclose(T, expected)
+        assert np.allclose(K, rig.node._camera_K)
+        assert np.allclose(dist, rig.node._camera_dist)
+    finally:
+        rig.close()
+        camera_server.stop()
+        lift_server.stop()
+
+
+def test_node_real_path_no_camera(monkeypatch):
+    monkeypatch.setattr(locator_node, "Detector", _NoLugDetector)
+    lift_server = _start_lift_server()
+    rig = Rig(parameter_overrides=_real_parameters(lift_server, "127.0.0.1:1"))
+    try:
+        rig.wait_until(
+            lambda: rig.node._core._lift is not None
+            and rig.node._core._lift.height_m is not None,
+            10.0,
+            "昇降部の状態が届かない",
+        )
+        goal_handle = rig.send_goal(azimuth_from_rad=0.0, azimuth_span_rad=0.3)
+        assert goal_handle.accepted
+        result = rig.get_result(goal_handle, timeout=15.0)
+        assert result.reason == "camera_pose_unknown"
+        time.sleep(0.3)
+        # 昇降機を動かしていない
+        assert [m for m in lift_server.messages if m.get("t") == "goto"] == []
+    finally:
+        rig.close()
+        lift_server.stop()
+
+
+def test_node_real_path_snapshot_pose_unknown(monkeypatch):
+    # 静止画の応答の X-Boot-Id が state の boot_id と違う（撮っている間に再起動した）
+    monkeypatch.setattr(locator_node, "Detector", _NoLugDetector)
+    lift_server = _start_lift_server()
+    camera_server = CameraStubServer()
+    camera_server.start()
+    camera_server.set_auto_state(
+        {
+            "t": "state",
+            "seq": 1,
+            "boot_id": "boot-1",
+            "pitch_deg": -20.0,
+            "yaw_deg": 10.0,
+            "yaw_zeroed": True,
+            "yaw_dps": 10.0,
+            "owner": None,
+            "owner_name": None,
+            "owner_operator": None,
+            "aim": None,
+        },
+        arrive_on_aim=True,
+    )
+    camera_server.set_snapshots(
+        [
+            (
+                200,
+                {
+                    "X-Boot-Id": "boot-2",
+                    "X-Yaw-Deg": 30.0,
+                    "X-Pitch-Deg": -35.0,
+                    "X-Still-Ms": 1000,
+                    "X-Frame-Age-Ms": 10,
+                },
+                _jpeg(),
+            )
+        ]
+    )
+    rig = Rig(
+        parameter_overrides=_real_parameters(
+            lift_server, "127.0.0.1:%d" % camera_server.port
+        )
+    )
+    try:
+        rig.wait_until(
+            lambda: rig.node._core._lift is not None
+            and rig.node._core._lift.height_m is not None
+            and rig.node._core._camera is not None
+            and rig.node._core._camera.pose_known,
+            10.0,
+            "昇降部・カメラの状態が届かない",
+        )
+        goal_handle = rig.send_goal(azimuth_from_rad=0.0, azimuth_span_rad=0.3)
+        assert goal_handle.accepted
+
+        def gotos():
+            return [m for m in lift_server.messages if m.get("t") == "goto"]
+
+        rig.wait_until(lambda: gotos(), 10.0, "goto が届かない")
+        target_mm = gotos()[0]["target_mm"]
+        arrived = dict(REAL_LIFT_STATE)
+        arrived["height_mm"] = target_mm
+        arrived["goto"] = {
+            "by": "ss", "press": gotos()[0]["press"], "target_mm": target_mm,
+            "status": "ARRIVED", "reason": "NONE",
+        }
+        lift_server.set_auto_state(arrived)
+
+        result = rig.get_result(goal_handle, timeout=20.0)
+        assert result.reason == "camera_pose_unknown"
+    finally:
+        rig.close()
+        camera_server.stop()
+        lift_server.stop()

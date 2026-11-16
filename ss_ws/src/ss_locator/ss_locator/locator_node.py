@@ -2,14 +2,16 @@
 
 `locate_core` の命令を実行し、昇降機・カメラ・検出器の出来事を渡す。
 撮った画像の検出と `assemble.lift` はこのノードで行う。
-本物の hve-system につなぐ部分は `WP-HVE-01` まで無いので、`use_fakes` が false のときは
-起動時にエラーで止まる。
+`use_fakes` が false のときは本物の道（昇降機は `HveLift`、カメラは `HveCamera`、
+検出は `Detector`）を使う。本物のカメラの静止画は別スレッドで取り、検出して床に戻した
+結果を出来事として積む（ノードの周期を止めない）。
 
 詳細設計: `docs/plan/detailed/DetailedDesign-locate.md`、
 `docs/plan/detailed/DetailedDesign-core.md` §5、`docs/plan/detailed/DetailedDesign-names.md` §3・§5。
 """
 from __future__ import annotations
 
+import dataclasses
 import threading
 import time
 
@@ -25,10 +27,13 @@ from ss_msgs.msg import CleanupDone, LocatorStatus, PanelTop
 from unique_identifier_msgs.msg import UUID
 
 from . import assemble, geometry, scan_plan
+from .detector import Detector
 from .fakes import FakeCamera, FakeDetector, FakeLift
+from .hve_camera import HveCamera
 from .hve_lift import HveLift
 from .locate_core import (
     CameraPoint,
+    CameraRelease,
     Cancel,
     FrameDone,
     GoalRequest,
@@ -81,27 +86,42 @@ class LocatorNode(Node):
         self._declare_parameters()
         self._read_parameters()
 
-        if not self.use_fakes:
-            raise RuntimeError(
-                "use_fakes=false: 本物のカメラモジュールとつなぐ部分は WP-HVE-02 まで無い"
-            )
-
         self._lock = threading.RLock()
         self._shutdown = False
 
         self._core = LocateCore(self._core_parameters())
 
+        self._frame_count = 0
+        if self.use_fakes:
+            self._detector = FakeDetector(self.fake_fixture, scene=self.fake_scene)
+        else:
+            # 学習済みモデルを読む（無い・SHA-256 が合わなければここで止まる）
+            self._detector = Detector(
+                self.model_file,
+                self.model_sha256,
+                self.detect_imgsz,
+                self.detect_conf,
+            )
         self._lift = (
             HveLift(
                 self.lift_host,
                 cmd_period_ms=self.lift_cmd_period_ms,
                 state_timeout_ms=self.lift_state_timeout_ms,
             )
-            if self.hve_lift
+            if (self.hve_lift or not self.use_fakes)
             else FakeLift()
         )
-        self._camera = FakeCamera(self.fake_fixture, scene=self.fake_scene)
-        self._detector = FakeDetector(self.fake_fixture, scene=self.fake_scene)
+        if self.use_fakes:
+            self._camera = FakeCamera(self.fake_fixture, scene=self.fake_scene)
+        else:
+            self._camera = HveCamera(
+                self.camera_host,
+                lift=self._lift,
+                cmd_period_ms=self.camera_cmd_period_ms,
+                state_timeout_ms=self.camera_state_timeout_ms,
+                snapshot_min_interval_ms=self.snapshot_min_interval_ms,
+                image_timeout_s=self.image_timeout_s,
+            )
         self._last_lift = self._lift.advance(0.0)
 
         self._events = []
@@ -185,6 +205,11 @@ class LocatorNode(Node):
         self.declare_parameter("lift_cmd_period_ms", 100)
         self.declare_parameter("lift_state_timeout_ms", 600)
 
+        self.declare_parameter("camera_host", "")
+        self.declare_parameter("camera_cmd_period_ms", 100)
+        self.declare_parameter("camera_state_timeout_ms", 600)
+        self.declare_parameter("snapshot_min_interval_ms", 200)
+
     def _read_parameters(self):
         def value(name):
             return self.get_parameter(name).value
@@ -224,6 +249,11 @@ class LocatorNode(Node):
         self.lift_host = str(value("lift_host"))
         self.lift_cmd_period_ms = int(value("lift_cmd_period_ms"))
         self.lift_state_timeout_ms = int(value("lift_state_timeout_ms"))
+
+        self.camera_host = str(value("camera_host"))
+        self.camera_cmd_period_ms = int(value("camera_cmd_period_ms"))
+        self.camera_state_timeout_ms = int(value("camera_state_timeout_ms"))
+        self.snapshot_min_interval_ms = int(value("snapshot_min_interval_ms"))
 
         self.status_period_s = max(0.001, self.status_period_ms / 1000.0)
 
@@ -334,6 +364,8 @@ class LocatorNode(Node):
         elif isinstance(command, CameraPoint):
             self._camera.point(command.yaw_rad, command.pitch_down_rad)
             self._events.append(self._camera.state())
+        elif isinstance(command, CameraRelease):
+            self._camera.release()
         elif isinstance(command, RequestFrame):
             self._handle_frame()
         elif isinstance(command, SendFeedback):
@@ -344,37 +376,63 @@ class LocatorNode(Node):
             self._send_cleanup_done(command)
 
     def _handle_frame(self):
-        captured = self._camera.capture()
-        if captured is None:
-            self._events.append(FrameDone(float(self._camera.yaw_rad), [], False))
-            return
-        keypoints, confidences = self._detector.detect(captured["view"])
+        # 偽はその場で、本物は別スレッドで終わったあとに `_on_captured` が呼ばれる
+        self._camera.capture(self._on_captured)
+
+    def _on_captured(self, verdict, captured):
+        """撮れた（または撮れなかった）結果を検出して、出来事として積む。"""
+        try:
+            events = self._frame_events(verdict, captured)
+        except Exception as error:
+            self.get_logger().error(
+                "静止画の検出・床への戻しで例外: %s: %s" % (type(error).__name__, error)
+            )
+            events = [FrameDone(0.0, [], False)]
+        with self._lock:
+            self._events.extend(events)
+
+    def _frame_events(self, verdict, captured):
+        if verdict == "pose_unknown":
+            # 向きが読めない。`locate_core` は `pose_known: false` を `camera_pose_unknown` にする
+            return [dataclasses.replace(self._camera.state(), pose_known=False)]
+        if verdict != "use" or captured is None:
+            yaw = float(self._camera.yaw_rad) if self.use_fakes else 0.0
+            return [FrameDone(yaw, [], False)]
+
+        if self.use_fakes:
+            view = captured["view"]
+            keypoints, confidences = self._detector.detect(view)
+        else:
+            lift = self._last_lift
+            if lift is None or lift.height_m is None:
+                return [FrameDone(float(captured["yaw_rad"]), [], False)]
+            self._frame_count += 1
+            view = self._frame_count
+            keypoints, confidences = self._detector.detect(captured["image"])
         camera = self._camera_parameters(captured)
         lugs = assemble.lift(
             keypoints,
             confidences,
             camera,
-            captured["view"],
+            view,
             self.top_height_default_m,
         )
-        self._events.append(FrameDone(float(captured["yaw_rad"]), lugs, True))
+        return [FrameDone(float(captured["yaw_rad"]), lugs, True)]
 
     def _camera_parameters(self, captured):
-        """偽のときだけ材料の `T` を使い、本物では `geometry.camera_T` で作る（分岐はここだけ）。"""
+        """偽のときだけ材料の `T` を使い、本物では `geometry.camera_T` で作る（分岐はここだけ）。
+
+        本物の向きは `state` ではなく静止画の応答ヘッダの値（`captured`）。
+        """
         if self.use_fakes:
             return captured["K"], captured["dist"], captured["T"]
 
-        # 本物の hve-system につなぐ部分は WP-HVE-01。今はここへ来ない
-        lift = self._last_lift if self._last_lift is not None else LiftState(0.0)
+        lift = self._last_lift
         height = float(lift.height_m) + self.camera_height_offset_m
-        yaw = float(self._camera.yaw_rad) if self._camera is not None else 0.0
-        pitch = (
-            float(self._camera.pitch_down_rad) if self._camera is not None else 0.0
-        )
         T = geometry.camera_T(
             height,
-            yaw,
-            pitch,
+            float(captured["yaw_rad"]),
+            float(captured["pitch_down_rad"]),
             self.camera_mount_x_m,
             self.camera_mount_y_m,
             self.camera_forward_offset_m,
@@ -494,6 +552,8 @@ class LocatorNode(Node):
     # ------------------------------------------------------------------ 終了
     def destroy_node(self):
         self._shutdown = True
+        if isinstance(self._camera, HveCamera):
+            self._camera.close()
         if isinstance(self._lift, HveLift):
             self._lift.close()
         for event in list(self._result_events.values()):
