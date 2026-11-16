@@ -242,3 +242,11 @@ hve が口を書いたら、本システムが確かめる（[Spec-open.md](../s
 **ピッチの可動範囲**: `scan_pitch_down_deg` が hve の `state` の範囲の外でも、起動は止めない。`aim` が `TARGET_RANGE` で返り、`no_image` になる（ログに hve の理由の名前を出す）。
 
 **本システムが持たないもの**: ヨーの原点合わせ（人だけ）・ズーム・設定の変更。カメラモジュールへは `ceiling_sensor` を名乗らない。
+
+**`WP-HVE-03` で決めたこと**（2026-11-17。実装のとき設計書に無かった所）:
+
+- **静止画の結果の渡し方**: `HveCamera.capture(on_done)` はすぐ戻り、別スレッドで取って `on_done(verdict, result)` を呼ぶ。ノードは同じスレッドで検出と金具を床に戻すことまで行い、出来事を積む（ノードの周期は止めない）。`pose_unknown` は `pose_known: false` の `CameraState`、`fail` と昇降部の高さが読めないときは `FrameDone(ok: false)` にする。**この処理の中の例外はログに出し、`FrameDone(ok: false)` にする。**
+- **カメラモジュールの居場所**: 昇降部の `state.modules` を読む入口として `HveLift.modules()` を足した（最後に受けた `state` の `modules`。切れると `None`）。読む形は hve の文書の一覧の形（`name`・`ip` を持つ要素の並び）。名前を鍵にした形も読む。**実機の形と照らす**（[docs/試験項目.md](../../試験項目.md)）。
+- 静止画の取り直しは、前の要求を始めてから `snapshot_min_interval_ms` 以上空ける（要求をまたいで効く）。`frame_verdict` に渡す起動の番号は、向けたときに見ていた `state` のもの。
+- 偽と本物で、ノードの命令の呼び方（`CameraRelease`・`RequestFrame`）をそろえた。**これまでノードは `CameraRelease` を実行していなかった**（偽のカメラでは何もしないので害は無かった）。
+- `use_fakes` が false の起動は、`Detector` が学習済みモデルを照らす所で止まりうる（`model/` が無い・SHA-256 が違う）。

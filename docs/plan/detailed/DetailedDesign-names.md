@@ -173,7 +173,7 @@
 | `SendResult.cleanup_limit_s` | `locate_core.py` | 結果の `cleanup_limit_s` に入れる値 |
 | `INTERFACE_VERSION` | `locator_node.py` | `"2"` |
 
-## 10. hve-system のカメラモジュールとつなぐ（[-hve.md](DetailedDesign-hve.md) §7。案）
+## 10. hve-system のカメラモジュールとつなぐ（[-hve.md](DetailedDesign-hve.md) §7。2026-11-17 実装済み）
 
 相手側の名前（`aim`・`state` のフィールド・応答ヘッダ・止めた理由）は hve の文書が正（§1）。
 
@@ -186,6 +186,8 @@
 | `CameraState.arrived`・`taken_over`・`failed`・`yaw_speed_rad_s` | `locate_core.py` | 向け終えた・人などに取って代わられた・向けられない・ヨーの速さ（`None` 可）。どれも既定は「起きていない」 | `WP-HVE-02` |
 | `CameraState.yaw_rad`・`CameraPoint.yaw_rad` の `None` | `locate_core.py` | ヨーの向きが読めない・ヨーは動かさない | `WP-HVE-02` |
 | `ss_locator/hve_camera.py` | ファイル（つなぐ） | `HveCamera`（`point`・`release`・`state`・`capture`・`close`） | `WP-HVE-03` |
+| `HveLift.modules` | メソッド（`hve_lift.py`） | 昇降部の最後の `state` の `modules`（切れると `None`）。カメラモジュールの居場所を引くのに使う（`WP-HVE-03` で足した。2026-11-17 に実装管理担当が登録） | `WP-HVE-03` |
+| `host_from_modules` | 関数（`hve_camera.py`） | `modules` から `hve-cam` の `ip` を取り出す。無ければ `None`（同上） | `WP-HVE-03` |
 | `CAMERA_WS_MODULE_PATH`・`CAMERA_SNAPSHOT_PATH` | 定数（`hve_camera.py`） | `/ws/module`・`/api/snapshot` | `WP-HVE-03` |
 | `tests/test_hve_camera_core.py`・`tests/test_hve_camera.py`・`tests/camera_stub_server.py` | 試験 | 純関数 ／ 小さなサーバを相手にした試験 ／ 試験の中だけで使う小さなサーバ（WebSocket と静止画） | `WP-HVE-02`／`WP-HVE-03` |
 
