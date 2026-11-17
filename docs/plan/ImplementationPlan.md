@@ -271,7 +271,7 @@ th-system では 14 回マージしたのに計画書に反映されたのは 1 
 | 2 | **ホストから実機のつなぎ先で本システムと道具を起こすスクリプトと、`docs/使い方.md`**（[detailed/DetailedDesign-tester.md](detailed/DetailedDesign-tester.md) §7。パケットは `WP-TEST-01` のあとに切る） | 未着手（詳細設計がまだ） |
 | 3 | **カメラの取付の位置（`camera_mount_*`・`camera_forward_offset_m`・`camera_height_offset_m`）と `scan_pitch_down_deg` を実機で測る・決める。**`camera_height_offset_m` が 0 のままだと必ず `camera_too_low` で返る（[detailed/DetailedDesign-open.md](detailed/DetailedDesign-open.md) §1 の 6） | 待ち（実機） |
 | 4 | `WP-CAL-01`（内部パラメータの校正。1280×720 のチェッカーボード） | 待ち（hve のカメラの画像） |
-| 5 | **hve の実機側**: 昇降部の実機への書き込み（hve `WP-LIFT-14` ほか）・カメラモジュールの実機版。届いたら `WP-HVE-01`・`WP-HVE-03` を実機で確かめる | 待ち（hve） |
+| 5 | **hve の実機側**: 昇降部の実機への書き込み（hve `WP-LIFT-14` ほか）・カメラモジュールの実機版。届いたら `WP-HVE-01`・`WP-HVE-03` を実機で確かめる | **カメラモジュールの口は実機に入った**（2026-11-17 hve から連絡。hve `1e37389`。UnitV2 は 192.168.5.129・「機体の前を 0° に」・正が左・静止画 1280×720 を hve が実機で確認。**ss からヨー・ピッチを向ける命令は実機で未確認**で、ss から試すときは hve に知らせる。ヨーの 0° は ss で使う前に人が機体の正面で押し直す）。昇降部は待ち（hve） |
 | 6 | 実機で決める値: 昇降の速さと `cleanup_timeout_s`・`cleanup_limit_max_s`（[detailed/DetailedDesign-open.md](detailed/DetailedDesign-open.md) §1 の 9）・コンテナから `hve-lift.local` が引けるか（同 §1 の 10）・ヨーの原点の合わせ方（`SS-A2`） | 待ち（実機） |
 | 7 | **実機で配置図を出す**: 1〜6 が揃ったら、道具で全周を依頼し、上から見た図を得る。あわせてノートパソコンでの処理時間（`SS-V3`）を測る | 待ち（1〜6） |
 | 8 | 実物の画像での精度（`SS-V1`。模擬天板と巻き尺）。配置図の精度の暫定の目標（[Spec.md](spec/Spec.md) §3）と比べる | 未着手（7 のあと） |
