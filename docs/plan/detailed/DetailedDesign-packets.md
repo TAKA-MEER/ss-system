@@ -22,7 +22,7 @@
 | `WP-DEMO-02` | 金具認識のリアルタイム表示の起動スクリプト | `WP-DEMO-01` | できる |
 | `WP-DEMO-03` | 金具認識のリアルタイム表示に速さと入力の解像度を出す | `WP-DEMO-01` | できる |
 | `WP-LOC-03` | 口の版 2（理由 2 つ・後片付けの上限・`cleanup_limit_s`） | `WP-HVE-01` | 済み（2026-11-17 マージ） |
-| `WP-TEST-01` | 依頼を手で試す道具（テスト用の端末のコマンド） | `WP-LOC-02` | **ユーザーの確認待ち**（[Spec-tester.md](../spec/Spec-tester.md) §3） |
+| `WP-TEST-01` | 依頼を手で試す道具（テスト用の端末のコマンド） | `WP-LOC-03` | できる（[Spec-tester.md](../spec/Spec-tester.md) §3 は 2026-11-17 決定） |
 
 先行試作は `../../lifting-lug-pose` の `9265d2d`。**試作のリポジトリは読むだけで、書き換えない。**
 
@@ -419,7 +419,7 @@ scripts/demo.sh --source <金具の写っていない画像フォルダ> --headl
 
 ## `WP-TEST-01` 依頼を手で試す道具
 
-**状態: 2026-11-15 案。着手は [Spec-tester.md](../spec/Spec-tester.md) §3 の確認のあと。**
+**状態: 2026-11-15 案。2026-11-17 に [Spec-tester.md](../spec/Spec-tester.md) §3 が決まり、口の版 2 に合わせた。着手できる。**
 
 **読む節**: [-tester.md](DetailedDesign-tester.md) 全部、[-locate.md](DetailedDesign-locate.md) §1〜§4、[-names.md](DetailedDesign-names.md) §3・§8。
 
@@ -458,13 +458,16 @@ ros2 run ss_locator locate_cli --plot .briefs/tmp/top.png --json .briefs/tmp/res
 | `test_cli_confirm_no_sends_nothing` | 確認に `n` と答えると 0 で終わり、ノードの `phase` が `IDLE` のまま（依頼が届いていない） |
 | `test_cli_cancel_waits_cleanup` | 途中で取り消しの印を立てると、結果の `reason` が `canceled` で、**後片付けの完了を出してから** 0 で終わる |
 | `test_cli_second_interrupt` | 取り消しの印を 2 回立てると、待たずに 130 で終わる |
+| `test_cli_version_mismatch` | 状態の `interface_version` が `"2"` でないと 3 で終わり、依頼を出さない |
+| `test_cli_cleanup_wait_from_limit` | 後片付けの完了を待つ上限が、結果の `cleanup_limit_s` ＋ `--cleanup-margin-s` で決まる（`cleanup_limit_s` を変えると待つ時間が変わる。偽の時計か、待つ時間を返す純関数で縛る） |
+| `test_format_result_v2_reasons` | 盤 0 面で `ceiling_unknown`・`camera_pose_unknown` のそれぞれに、名前と説明が出る |
 | `test_cli_no_server` | ノードが無いと、`--wait-s` のあと 3 で終わり、依頼を出さない |
 | `test_cli_busy` | 別の依頼の最中に起こすと 4 で終わる |
 | `test_cli_status_only` | `--status` で状態を出して 0。依頼を出さない |
 | `test_cli_ignores_other_cleanup` | 依頼の ID が違う `cleanup_done` が先に届いても、それで終わらない |
 | `test_cli_writes_plot_and_json` | `--plot`・`--json` のファイルができ、PNG が 800×800、JSON の `reason` が結果と同じ。付けなければファイルができない |
 
-**変異チェック（実装管理担当が自分で回す）**: (1) `locate_cli.py` で確認に `n` でも依頼を送る、(2) 取り消したあと後片付けの完了を待たずに終わる、(3) `cleanup_done` の依頼の ID を照らさない、(4) `locate_view.py` で度を rad に直さない、(5) 図の左右を逆にする、のそれぞれで試験が落ちること。
+**変異チェック（実装管理担当が自分で回す）**: (1) `locate_cli.py` で確認に `n` でも依頼を送る、(2) 取り消したあと後片付けの完了を待たずに終わる、(3) `cleanup_done` の依頼の ID を照らさない、(4) `locate_view.py` で度を rad に直さない、(5) 図の左右を逆にする、(6) `cleanup_limit_s` を無視して固定の時間で待つ、(7) 版の照合を `"1"` に戻す、のそれぞれで試験が落ちること。
 
 ## `WP-LOC-03` 口の版 2
 

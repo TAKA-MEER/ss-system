@@ -159,7 +159,7 @@
 | `ss_locator/locate_view.py` | ファイル（純関数） | `goal_from_args`・`format_status`・`format_result`・`format_cleanup`・`draw_top_view`・`result_to_dict` |
 | `ss_locator/locate_cli.py` | ファイル（つなぐ） | `run_cli`・`main` |
 | `locate_cli` | 実行ファイル（`setup.py` の `console_scripts`） | `ss_locator.locate_cli:main` |
-| `--from-deg`・`--span-deg`・`--max-distance-m`・`--time-limit-s`・`--yes`・`--status`・`--plot`・`--json`・`--wait-s`・`--cleanup-wait-s` | `locate_cli` の引数 | [-tester.md](DetailedDesign-tester.md) §2 |
+| `--from-deg`・`--span-deg`・`--max-distance-m`・`--time-limit-s`・`--yes`・`--status`・`--plot`・`--json`・`--wait-s`・`--cleanup-margin-s` | `locate_cli` の引数 | [-tester.md](DetailedDesign-tester.md) §2 |
 | 終了コード 0・2・3・4・5・130 | `locate_cli` | 結果と後片付けの完了を受けた（または依頼を出さずに終わった）・引数の誤り・応えない／版が合わない・依頼できない／拒否・後片付けの完了が届かない・待たずに終わった（[-tester.md](DetailedDesign-tester.md) §3） |
 | `tests/test_locate_view.py`・`tests/test_locate_cli.py` | 試験 | `WP-TEST-01` |
 
