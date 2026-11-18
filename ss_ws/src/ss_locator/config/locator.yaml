@@ -24,9 +24,11 @@ locator_node:
     camera_mount_y_m: 0.0
     camera_forward_offset_m: 0.0
     camera_height_offset_m: 0.0
-    # 偽のカメラが使う合成データの値（本物は WP-CAL-01 で校正する）
-    camera_K: [1082.4794514973958, 0.0, 640.0, 0.0, 1082.4794514973958, 360.0, 0.0, 0.0, 1.0]
-    camera_dist: [-0.018133423603158887, 0.0, 0.0, 0.0, 0.0]
+    # hve のカメラモジュール（UnitV2）の 1280×720 の静止画で校正した値（WP-CAL-01。2026-11-18）。
+    # チェッカーボード 9×6 交点・1 マス 23.7 mm、31 枚、再投影誤差 0.41 px、fx のばらつき ±22 px。
+    # 偽のカメラは材料（fixture）の K を使うので、この値には影響されない。
+    camera_K: [1482.80, 0.0, 638.13, 0.0, 1482.66, 367.04, 0.0, 0.0, 1.0]
+    camera_dist: [0.02116, -0.27909, 0.0, 0.0, 0.0]
 
     use_fakes: false
     fake_fixture: ss_ws/src/ss_locator/tests/fixtures/proto_9265d2d.json
