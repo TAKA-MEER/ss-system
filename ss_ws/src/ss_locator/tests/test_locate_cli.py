@@ -212,7 +212,7 @@ def test_cli_second_interrupt(rig):
 
 
 def test_cli_version_mismatch(monkeypatch):
-    monkeypatch.setattr(locator_node, "INTERFACE_VERSION", "1")
+    monkeypatch.setattr(locator_node, "INTERFACE_VERSION", "2")
     r = ServerRig()
     try:
         code, lines = run(["--yes"])
@@ -286,7 +286,7 @@ def test_cli_busy(rig):
 def test_cli_status_only(rig):
     code, lines = run(["--status"])
     assert code == 0
-    assert any("IDLE" in l and "interface_version=2" in l for l in lines)
+    assert any("IDLE" in l and "interface_version=3" in l for l in lines)
     time.sleep(0.3)
     assert rig.idle()
     assert not any("受け付けました" in l for l in lines)
@@ -337,6 +337,16 @@ def test_cli_writes_plot_and_json(rig, tmp_path):
     code, _ = run(["--yes"])
     assert code == 0
     assert sorted(p.name for p in tmp_path.iterdir()) == before == ["result.json", "top.png"]
+
+
+def test_cli_json_has_depth_measured(rig, tmp_path):
+    record = tmp_path / "result.json"
+    code, lines = run(["--yes", "--json", str(record)])
+    assert code == 0
+    data = json.loads(record.read_text(encoding="utf-8"))
+    assert len(data["result"]["panels"]) >= 1
+    for panel in data["result"]["panels"]:
+        assert isinstance(panel["depth_measured"], bool)
 
 
 def test_cli_bad_args():
