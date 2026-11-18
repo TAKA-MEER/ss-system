@@ -25,6 +25,7 @@
 | `WP-TEST-01` | 依頼を手で試す道具（テスト用の端末のコマンド） | `WP-LOC-03` | 済み（2026-11-17 マージ） |
 | `WP-EST-04` | 四隅が写らない盤と背中合わせの盤を組む（口は変えない） | `WP-EST-02` | 済み（2026-11-18 マージ） |
 | `WP-LOC-04` | 口の版 3（`depth_measured`） | `WP-EST-04` | 済み（2026-11-18 マージ） |
+| `WP-CAL-02` | カメラの取り付け（光軸に沿った距離・角度のずれ）と校正の道具 | `WP-CAL-01` | できる |
 
 先行試作は `../../lifting-lug-pose` の `9265d2d`。**試作のリポジトリは読むだけで、書き換えない。**
 
@@ -509,6 +510,46 @@ ros2 run ss_locator locate_cli --plot .briefs/tmp/top.png --json .briefs/tmp/res
 | 既存 | 試作との一致の試験（`assemble`）は直さずに通る。`locate_core`・ノードの試験で、金具 2 個の盤の値が変わったものは新しい値に直す（**何を直したかを報告に列挙する**） |
 
 **変異チェック（実装管理担当が自分で回す）**: (1) 間隔の判定を外す、(2) 広がる側の符号を逆にする、(3) `locate_core` でまとめる手順を呼ばない（**本番の経路を縛る**）、(4) 継ぎ目のわなの ① で「`k`・`l` が線から離れている」の確かめを外す（`test_side_by_side_row` が落ちる。① 全体を外しても、4 個の斜めは ② でも捨てられるので試験は落ちない。2026-11-18 MuseEmber の指摘）、(5) まとめる条件 (iii)（向かい合うのは測った列どうし）を外す、(6) `k` の数え方で金具 2 個の組の広がる側を見ない（常に 0 とする）、のそれぞれで試験が落ちること。
+
+## `WP-CAL-02` カメラの取り付けと、角度のずれの校正の道具
+
+**状態: 2026-11-18 案。**[Spec.md](../spec/Spec.md) §1.2「カメラの位置・内部パラメータの出どころ」（2026-11-18 ユーザー決定）。**口（`ss_msgs`）は変えない。**
+
+**読む節**: [-core.md](DetailedDesign-core.md) §2・§2.1、[-names.md](DetailedDesign-names.md) §5（`camera_*`）・§11。
+
+| やること | 中身 |
+| --- | --- |
+| 式 | `geometry.camera_T` に `optical_offset_m`・`pitch_offset_rad`・`yaw_offset_rad`・`roll_rad` を足す（[-core.md](DetailedDesign-core.md) §2 の式。**既定 0 で今までと同じ値**）。ずれは `camera_T` の中で足す（呼び出し側で足さない） |
+| ノード | `locator_node` の本物の道（`_camera_parameters`）で、新しい 4 つのパラメータを `camera_T` に渡す。パラメータを宣言し、`config/locator.yaml` に [-names.md](DetailedDesign-names.md) §5 の既定値（`camera_forward_offset_m` 0.08・`camera_optical_offset_m` 0.06・`camera_height_offset_m` 1.82・ずれ 3 つ）を書く。**ノードの宣言の既定値は 0 のまま**（偽の道の試験を変えない） |
+| 純関数 | `mount_fit.py`（[-core.md](DetailedDesign-core.md) §2.1 の 2） |
+| 道具 | `mount_calib.py`（§2.1 の 1・3。引数は [-names.md](DetailedDesign-names.md) §11）。カメラは `HveCamera`、検出は `Detector` を使う。試験で偽物に差し替えられる形にする。終わり方: 当てはめた → 0、向きが分からず動かさなかった・金具が 2 個に割り当たらなかった → 0 以外 |
+| 試験 | 下の表。**学習済みモデルとカメラは使わない**（偽の検出器・偽のカメラ）。時間に頼る試験を作らない |
+
+| 試験 | 確かめること |
+| --- | --- |
+| `test_camera_T_defaults_unchanged` | 新しい引数がすべて 0 なら、今までの `camera_T` と同じ行列 |
+| `test_camera_T_optical_offset` | `optical_offset_m` = b で光学中心が `b f` だけ動く（見下ろし 0° と 30° で） |
+| `test_camera_T_roll` | φ = +5° で、光学中心は動かず、カメラの右（x）が下へ回る。φ = 0 とは画像の中心の光線が同じ |
+| `test_camera_T_offsets_add` | δψ・δθ は、応答の角度に足したのと同じ行列 |
+| `test_fit_recovers_offsets` | 決めたずれ（δθ −2.6°・δψ −5.4°・φ +4.1°）で金具 2〜3 個を 5 つの向きから射影した画素 → 当てはめで 0.05° 以内に戻る（雑音なし）。画素に標準偏差 0.5 px の雑音（種を固定）→ 0.3° 以内 |
+| `test_fit_assignment` | 観測の並びを入れ替えても、ずれが ±8°（ヨー）・±5°（ピッチ）あっても、正しい金具に割り当たる |
+| `test_fit_fixed_height` | 既定では高さを動かさない。`fit_height=True` で高さも戻る（雑音なし） |
+| `test_fit_too_few` | 測った金具が 1 個・観測が 2 つ未満なら、わけを示す例外 |
+| `test_calib_offline` | `--from` で `observations.json` だけから当てはめ、値と 3 行の yaml を出して 0 で終わる（モデルを読まない） |
+| `test_calib_pose_unknown` | 偽のカメラの向きが分からない → `point` を 1 度も呼ばずに 0 以外 |
+| `test_calib_restores` | 偽のカメラで撮り終えたら、撮る前の向きへ `point` してから `release` する。途中で `taken_over` → それ以上 `point` しない |
+| `test_node_real_path_uses_camera_T`（直す） | 本物の道で、新しい 4 つのパラメータ（0 でない値）が `camera_T` に渡る（**本番の経路を縛る**） |
+
+**受け入れ条件**:
+
+```bash
+docker build -t ss-system:dev -f docker/Dockerfile .
+docker run --rm -v "$PWD":/ws ss-system:dev bash scripts/test.sh          # 0 で終わる（今までの試験も通る）
+```
+
+**実装管理担当が回すもの**: 2026-11-18 の模擬天板の観測（金具の画素とヘッダの向き 5 枚分）を `observations.json` にして `--from` で当てはめ、δθ ≈ −2.6°・δψ ≈ −5.4°・φ ≈ +4.1°・差の平均 ≈ 2 cm になること。
+
+**変異チェック（実装管理担当が自分で回す）**: (1) `camera_T` で φ の符号を逆にする、(2) `b f` を足さない、(3) ノードで新しいパラメータを `camera_T` に渡さない（**本番の経路を縛る**）、(4) 割り当て直しをしない、のそれぞれで試験が落ちること。
 
 ## `WP-LOC-04` 口の版 3
 

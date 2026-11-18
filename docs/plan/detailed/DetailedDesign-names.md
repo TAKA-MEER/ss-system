@@ -105,8 +105,10 @@
 | `settle_s` | s | 0.5 | **暫定**（向けてから撮るまで待つ。静止画は最大約 0.1 s 前のコマ: 試作 E13） |
 | `image_timeout_s` | s | 5 | **暫定** |
 | `camera_mount_x_m`・`camera_mount_y_m` | m | 0 | **実測待ち**（ヨーの回転軸の `base_link` での位置） |
-| `camera_forward_offset_m` | m | 0 | **実測待ち**（回転軸から光学中心まで） |
-| `camera_height_offset_m` | m | 0 | **実測待ち**（昇降部の配信値から光学中心の床からの高さへ） |
+| `camera_forward_offset_m` | m | 0.08 | **実測**（2026-11-18 ユーザー。ヨーの回転軸からピッチの回転軸まで、水平・前向き。2026-11-18 に「光学中心まで」から改めた） |
+| `camera_optical_offset_m` | m | 0.06 | **実測**（2026-11-18 ユーザー。ピッチの回転軸から光学中心まで、光軸に沿って前。`WP-CAL-02` で足す） |
+| `camera_height_offset_m` | m | 1.82 | **実測**（2026-11-18 ユーザー。昇降量 0 のときピッチの回転軸は床から 1.82 m。昇降部の配信値からピッチの回転軸の床からの高さへ。2026-11-18 に「光学中心」から改めた） |
+| `camera_pitch_offset_deg`・`camera_yaw_offset_deg`・`camera_roll_deg` | ° | −2.6・−5.4・+4.1 | **校正の道具で求める**（[-core.md](DetailedDesign-core.md) §2・§2.1。既定は 2026-11-18 の模擬天板で当てはめた目安。`WP-CAL-02` で足す） |
 | `camera_K`・`camera_dist` | — | 偽のカメラは合成データの値 | **`WP-CAL-01` で校正** |
 | `use_fakes` | — | false | 偽の昇降機・カメラ・検出器を使う（試験・hve とつなぐ前の動作確認だけ。[-packets.md](DetailedDesign-packets.md) `WP-LOC-01`） |
 | `fake_fixture` | — | `ss_ws/src/ss_locator/tests/fixtures/proto_9265d2d.json` | 偽のカメラ・検出器の材料（`WP-EST-01`） |
@@ -213,3 +215,25 @@
 | `camera_cmd_period_ms` | ms | 100 | 先方（hve が勧める間隔） | `WP-HVE-03` |
 | `camera_state_timeout_ms` | ms | 600 | 2026-11-16 に hve へ答えた値 | `WP-HVE-03` |
 | `snapshot_min_interval_ms` | ms | 200 | 先方（hve の上限。早すぎると 429） | `WP-HVE-03` |
+
+## 11. カメラの取り付けの校正の道具（[-core.md](DetailedDesign-core.md) §2.1。`WP-CAL-02`。案）
+
+| 名前 | 種類 | 中身 |
+| --- | --- | --- |
+| `ss_locator/mount_fit.py` | ファイル（純関数） | `fit_mount_offsets`（観測と測った金具の位置 → δθ・δψ・φ と差）・`ground_point`（画素 → 天板の面の点） |
+| `ss_locator/mount_calib.py` | ファイル（道具） | 撮る・当てはめる・出す。`setup.py` の `mount_calib` |
+| `observations.json` | ファイル（道具が `--out` に書く） | 撮った向き（ヘッダのヨー・ピッチ、rad）・金具の画素・写真の名前と、測った金具の位置・天板の高さ・昇降量。`--from` で読む |
+| `tests/test_mount_fit.py`・`tests/test_mount_calib.py` | 試験 | 純関数 ／ 道具（偽のカメラ・偽の検出器） |
+
+| 引数 | 中身 |
+| --- | --- |
+| `--lugs` | 測った金具の水平の位置（m。`base_link`。`"x,y;x,y"`）。2 個以上 |
+| `--top-height-m` | 金具を置いた天板の床からの高さ（m） |
+| `--lift-height-m` | 撮るときの昇降量（m。hve の画面で読む） |
+| `--poses` | 向ける向き（度。`"ヨー:ピッチ,…"`） |
+| `--params-file` | `locator.yaml`（`camera_K`・`camera_dist`・取り付けの値・モデル）。既定は `config/locator.yaml` |
+| `--host` | カメラモジュールの IP（既定 `192.168.5.129`） |
+| `--out` | 写真と `observations.json` を書くフォルダ |
+| `--from` | 撮らずに、このフォルダの `observations.json` から当てはめる（`--lugs` などは json の値を使う） |
+| `--fit-height` | 高さも当てはめる（既定はしない） |
+
