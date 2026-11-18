@@ -171,8 +171,11 @@ def capture_observations(camera, detector, poses, *, settle_s=0.0,
 
 
 # ------------------------------------------------------------------ 当てる・出す
-def fit_from_data(data, params):
-    """`observations.json` の中身とパラメータ → `FitResult`。"""
+def fit_from_data(data, params, fit_height=None):
+    """`observations.json` の中身とパラメータ → `FitResult`。
+
+    `fit_height` を渡すと json の値より優先する（コマンドラインの `--fit-height`）。
+    """
     K = np.asarray(params.get("camera_K", data.get("camera_K")), float)
     dist = np.asarray(params.get("camera_dist", data.get("camera_dist")), float)
     height_m = _float(data, "height_m", 0.0)
@@ -199,12 +202,18 @@ def fit_from_data(data, params):
                                 _float(data, "camera_forward_offset_m", 0.0)),
         optical_offset_m=_float(params, "camera_optical_offset_m",
                                 _float(data, "camera_optical_offset_m", 0.0)),
-        fit_height=bool(data.get("fit_height", False)),
+        fit_height=(bool(data.get("fit_height", False))
+                    if fit_height is None else bool(fit_height)),
     )
 
 
-def report(result):
-    """3 つの値と、観測ごとの差・平均・最大と、`locator.yaml` に写す行を出す。"""
+def report(result, fit_height=False):
+    """3 つの値と、観測ごとの差・平均・最大と、`locator.yaml` に写す行を出す。
+
+    高さを当てはめたときだけ、当てはめた高さ（ピッチの回転軸の床からの高さ）も出す。
+    """
+    if fit_height:
+        print("height_m: %.3f" % result.height_m)
     print("camera_pitch_offset_deg: %.2f" % math.degrees(result.pitch_offset_rad))
     print("camera_yaw_offset_deg: %.2f" % math.degrees(result.yaw_offset_rad))
     print("camera_roll_deg: %.2f" % math.degrees(result.roll_rad))
@@ -264,12 +273,13 @@ def main(argv=None, camera_factory=None, detector_factory=None):
         except (OSError, ValueError) as error:
             print("cannot read observations: %s" % error, file=sys.stderr)
             return 1
+        fit_height = bool(args.fit_height) or bool(data.get("fit_height", False))
         try:
-            result = fit_from_data(data, params)
+            result = fit_from_data(data, params, fit_height=fit_height)
         except FitError as error:
             print(str(error), file=sys.stderr)
             return 1
-        report(result)
+        report(result, fit_height=fit_height)
         return 0
 
     if not args.lugs or not args.poses:
@@ -333,11 +343,11 @@ def main(argv=None, camera_factory=None, detector_factory=None):
              "pixels": np.asarray(o["pixels"], float).tolist()}
             for o in observations]
     try:
-        result = fit_from_data(data, params)
+        result = fit_from_data(data, params, fit_height=bool(args.fit_height))
     except FitError as error:
         print(str(error), file=sys.stderr)
         return 1
-    report(result)
+    report(result, fit_height=bool(args.fit_height))
     return 0
 
 

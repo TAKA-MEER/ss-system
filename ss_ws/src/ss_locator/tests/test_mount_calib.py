@@ -139,3 +139,39 @@ def test_calib_taken_over_stops(tmp_path):
     argv, cam_f, det_f = _args(tmp_path, camera)
     code = main(argv, camera_factory=cam_f, detector_factory=det_f)
     assert len(camera.points) == 1  # それ以上 point しない
+
+
+def test_calib_offline_fit_height_override(tmp_path, capsys):
+    # --fit-height は json の値（ここでは false）より優先し、高さも当てはめる。
+    # 画素は高さ 2.9 で生成し、json の名目高さは 2.6。
+    observations = []
+    for yaw_deg, pitch_deg in POSES_DEG:
+        T = G.camera_T(2.9, math.radians(yaw_deg), math.radians(pitch_deg),
+                       **MOUNT, **TRUE)
+        pts = np.c_[LUGS, np.full(len(LUGS), TOP_HEIGHT_M)]
+        uv, ok = G.project(pts, K, DIST, T, 1280, 720)
+        assert ok.all()
+        observations.append({"yaw_rad": math.radians(yaw_deg),
+                             "pitch_down_rad": math.radians(pitch_deg),
+                             "pixels": uv.tolist(), "photo": "frame.jpg"})
+    data = {"lugs": LUGS.tolist(), "top_height_m": TOP_HEIGHT_M,
+            "lift_height_m": 2.6, "height_m": 2.6,
+            "camera_K": K.ravel().tolist(), "camera_dist": DIST.tolist(),
+            "camera_mount_x_m": 0.0, "camera_mount_y_m": 0.0,
+            "camera_forward_offset_m": 0.08, "camera_optical_offset_m": 0.06,
+            "camera_height_offset_m": 0.0, "fit_height": False,
+            "observations": observations}
+    (tmp_path / "observations.json").write_text(json.dumps(data))
+    code = main(["--from", str(tmp_path), "--fit-height",
+                 "--params-file", str(tmp_path / "none.yaml")])
+    assert code == 0
+    out = capsys.readouterr().out
+    heights = [ln for ln in out.splitlines() if ln.startswith("height_m:")]
+    assert len(heights) == 1
+    assert abs(float(heights[0].split(":")[1]) - 2.9) < 0.01
+    lines = {ln.split(":")[0]: float(ln.split(":")[1])
+             for ln in out.splitlines()
+             if ln.startswith("camera_") and ":" in ln}
+    assert abs(lines["camera_pitch_offset_deg"] - (-2.6)) < 0.05
+    assert abs(lines["camera_yaw_offset_deg"] - (-5.4)) < 0.05
+    assert abs(lines["camera_roll_deg"] - 4.1) < 0.05
