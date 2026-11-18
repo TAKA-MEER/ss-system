@@ -7,6 +7,10 @@ locator_node:
 
     max_distance_default_m: 5.0
     top_height_default_m: 2.35
+    two_lug_spacing_min_m: 0.5
+    two_lug_spacing_max_m: 0.8
+    two_lug_depth_default_m: 0.8
+    two_lug_depth_std_m: 0.06
     status_period_ms: 200
     cleanup_timeout_s: 30.0
     cleanup_margin_s: 10.0

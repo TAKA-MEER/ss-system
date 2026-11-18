@@ -424,7 +424,15 @@ class LocateCore:
     def _finish(self, reason, now, restore=True):
         raw_panels, lugs = assemble.assemble(self._obs)
         top_height = float(self._get("top_height_default_m", 2.35))
-        tops = [panels.to_panel_top(p, lugs, top_height) for p in raw_panels]
+        tops = [panels.to_panel_top(p, lugs, top_height)
+                for p in raw_panels if int(p["n_lugs"]) >= 3]
+        tops += panels.two_lug_panels(
+            raw_panels, lugs, top_height,
+            float(self._get("two_lug_spacing_min_m", 0.5)),
+            float(self._get("two_lug_spacing_max_m", 0.8)),
+            float(self._get("two_lug_depth_default_m", 0.8)),
+            float(self._get("two_lug_depth_std_m", 0.06)),
+        )
         found = panels.filter_panels(
             tops,
             self._goal.azimuth_from_rad,

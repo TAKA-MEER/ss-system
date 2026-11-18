@@ -173,6 +173,10 @@ class LocatorNode(Node):
 
         self.declare_parameter("max_distance_default_m", 5.0)
         self.declare_parameter("top_height_default_m", 2.35)
+        self.declare_parameter("two_lug_spacing_min_m", 0.5)
+        self.declare_parameter("two_lug_spacing_max_m", 0.8)
+        self.declare_parameter("two_lug_depth_default_m", 0.8)
+        self.declare_parameter("two_lug_depth_std_m", 0.06)
         self.declare_parameter("status_period_ms", 200)
         self.declare_parameter("cleanup_timeout_s", 30.0)
         self.declare_parameter("cleanup_margin_s", 10.0)
@@ -221,6 +225,10 @@ class LocatorNode(Node):
 
         self.max_distance_default_m = float(value("max_distance_default_m"))
         self.top_height_default_m = float(value("top_height_default_m"))
+        self.two_lug_spacing_min_m = float(value("two_lug_spacing_min_m"))
+        self.two_lug_spacing_max_m = float(value("two_lug_spacing_max_m"))
+        self.two_lug_depth_default_m = float(value("two_lug_depth_default_m"))
+        self.two_lug_depth_std_m = float(value("two_lug_depth_std_m"))
         self.status_period_ms = int(value("status_period_ms"))
         self.cleanup_timeout_s = float(value("cleanup_timeout_s"))
         self.cleanup_margin_s = float(value("cleanup_margin_s"))
@@ -261,6 +269,10 @@ class LocatorNode(Node):
         return {
             "max_distance_default_m": self.max_distance_default_m,
             "top_height_default_m": self.top_height_default_m,
+            "two_lug_spacing_min_m": self.two_lug_spacing_min_m,
+            "two_lug_spacing_max_m": self.two_lug_spacing_max_m,
+            "two_lug_depth_default_m": self.two_lug_depth_default_m,
+            "two_lug_depth_std_m": self.two_lug_depth_std_m,
             "scan_camera_height_m": self.scan_camera_height_m,
             "min_camera_height_m": self.min_camera_height_m,
             "scan_pitch_down_deg": self.scan_pitch_down_deg,
