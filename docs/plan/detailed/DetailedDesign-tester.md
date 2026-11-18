@@ -1,7 +1,7 @@
 # 依頼を手で試す道具（案）
 
 [DetailedDesign.md](DetailedDesign.md) の詳細。テスト用に、人が端末から依頼を出して結果を見るコマンド。
-**状態: 2026-11-15 案。2026-11-17 に口の版 2 に合わせた（版の照合・後片付けの待ち方・理由 2 つ）。**入力は [Spec-tester.md](../spec/Spec-tester.md)（§3 は 2026-11-17 決定）と [-locate.md](DetailedDesign-locate.md)（口）。名前の一覧は [-names.md](DetailedDesign-names.md) §8。
+**状態: 2026-11-15 案。2026-11-17 に口の版 2 に合わせた（版の照合・後片付けの待ち方・理由 2 つ）。2026-11-19 にホストから起こすスクリプト（§7）を足した。**入力は [Spec-tester.md](../spec/Spec-tester.md)（§3 は 2026-11-17 決定）と [-locate.md](DetailedDesign-locate.md)（口）。名前の一覧は [-names.md](DetailedDesign-names.md) §8。
 
 ---
 
@@ -99,9 +99,30 @@
 
 `--json` で書き出す中身: 依頼の値（度と rad）・結果（`reason`・盤の一覧・見た範囲・`cleanup_limit_s`）・後片付けの完了（`reason`・`lift_restored`）・依頼を受け付けた時刻。**盤の値は口の値のまま（rad・m）で書き、丸めない。**
 
-## 7. この案で決めないもの
+## 7. ホストから起こすスクリプト（`scripts/ss.sh`。`WP-TEST-02`。2026-11-19 案）
+
+試験担当者が、ホスト（ノートパソコン）の端末から本システムを起こし、依頼を出し、止める。手順書は `docs/使い方.md`。
+
+| 項目 | 決まり |
+| --- | --- |
+| 形 | 1 本の bash スクリプト `scripts/ss.sh <やること> [引数]`。どこから呼んでもリポジトリ直下を `/ws` に mount する |
+| コンテナ | 本システムは名前 `ss-system` のコンテナで 1 つだけ動かす（`docker run -d`。`--rm` は付けない。落ちたあとも `logs` で読めるように）。`--network host`・`--ipc host`（実機のカメラ・昇降部に届き、同じ機械の ROS 2 からも見える）。ホストに `ROS_DOMAIN_ID` があれば渡す |
+| 設定 | **`locator_node` には必ず `--params-file ss_ws/src/ss_locator/config/locator.yaml` を渡す**（渡さないと合成データの値で動く）。引数での上書きはそのうしろに `-p` で足す |
+| 書き出し | 依頼の結果は `out/`（リポジトリ直下。gitignore）に時刻の名前で書く。コンテナは root で動くので、書いたあとにホストの利用者の持ち物に直す（`chown`） |
+| docker の差し替え | 試験のため、呼ぶ docker を環境変数 `SS_DOCKER`（既定 `docker`）で差し替えられる。この名前は試験のためだけのもの |
+
+| やること | 中身 | 終了コード |
+| --- | --- | --- |
+| `start [--camera-host <IP>] [--lift-host <名前かIP>] [--fakes]` | 1. `ss-system` が動いていれば起こさない。止まったまま残っていれば消してから起こす。2. `--fakes` でなければ `model/lug_v3_s.pt` が在るか見る。3. イメージ `ss-system:dev` が無ければ作る。4. コンテナの中で `colcon build` してから `locator_node` を起こす（`--camera-host` は `-p camera_host:=`、`--lift-host` は `-p lift_host:=`、`--fakes` は `-p use_fakes:=true`）。5. **状態が読めるまで待つ**（`locate_cli --status` を繰り返す。上限は環境変数 `SS_START_WAIT_S`、既定 180 s。ビルドを含むため）。読めたら状態の 1 行を出す | 0 起きた・1 起こせない（動いている・モデルが無い・コンテナが落ちた・上限まで読めない。落ちた・読めないときはコンテナの記録の最後の 50 行を出す） |
+| `status` | `locate_cli --status` | `locate_cli` のまま。動いていなければ 1 |
+| `locate [locate_cli の引数]` | 引数を `locate_cli` にそのまま渡す。**`--plot`・`--json` が無ければ `out/<YYYYmmdd-HHMMSS>.png`・`.json` を足す**。端末なら `docker exec -it`（確認の入力と Ctrl+C を通す）。終わったら書いたファイルの持ち主を直し、パスを出す | `locate_cli` のまま。動いていなければ 1 |
+| `logs [-f]` | `docker logs`（`-f` は渡す） | docker のまま |
+| `stop [--force]` | 状態の `phase` が `IDLE` でなければ止めない（**依頼の最中に止めると、昇降機を元の高さに戻さない**）。`--force` なら止める。状態が読めないときは止める。止めたらコンテナを消す | 0 止めた（動いていなかった）・4 依頼の最中 |
+| `calib [mount_calib の引数]` | **`ss-system` が動いていれば撮らない**（どちらもカメラを動かすため。`--from` だけのときは動いていてもよい）。別のコンテナ（`docker run --rm`、`--network host`）で `mount_calib` を起こす。**`--params-file` が無ければ `ss_ws/src/ss_locator/config/locator.yaml` を足す**。`--out`・`--from` がどちらも無ければ `--out out/calib-<時刻>` を足す。終わったら `out/` の持ち主を直す | `mount_calib` のまま。動いているので撮れない → 1 |
+| それ以外・引数なし | 使い方を出す | 2 |
+
+## 8. この案で決めないもの
 
 | もの | どこで |
 | --- | --- |
-| ホストから 1 回で起こすスクリプト・実機での手順 | **次のパケット**（`WP-TEST-01` のあと。実機で配置図を出すのに要る。2026-11-17）。`docs/使い方.md` と一緒に作る |
 | 正解（巻き尺の値）と比べて誤差を出すこと | `SS-V1` の測り方を詳細にするとき |

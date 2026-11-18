@@ -172,6 +172,11 @@
 | `--from-deg`・`--span-deg`・`--max-distance-m`・`--time-limit-s`・`--yes`・`--status`・`--plot`・`--json`・`--wait-s`・`--cleanup-margin-s` | `locate_cli` の引数 | [-tester.md](DetailedDesign-tester.md) §2 |
 | 終了コード 0・2・3・4・5・130 | `locate_cli` | 結果と後片付けの完了を受けた（または依頼を出さずに終わった）・引数の誤り・応えない／版が合わない・依頼できない／拒否・後片付けの完了が届かない・待たずに終わった（[-tester.md](DetailedDesign-tester.md) §3） |
 | `tests/test_locate_view.py`・`tests/test_locate_cli.py` | 試験 | `WP-TEST-01` |
+| `scripts/ss.sh` | スクリプト（ホストで打つ） | `start`・`status`・`locate`・`logs`・`stop`・`calib`（[-tester.md](DetailedDesign-tester.md) §7。`WP-TEST-02`） |
+| `ss-system` | コンテナの名前 | `scripts/ss.sh start` が起こす `locator_node` のコンテナ |
+| `out/` | フォルダ（リポジトリ直下。gitignore） | `scripts/ss.sh locate`・`calib` が書く結果 |
+| `SS_DOCKER`・`SS_MODEL_PATH`・`SS_START_WAIT_S` | 環境変数（`scripts/ss.sh`） | 呼ぶ docker（既定 `docker`）・モデルの在りか（既定 `model/lug_v3_s.pt`）。この 2 つは試験で差し替えるためだけ ／ 起動を待つ上限（既定 180 s） |
+| `tests/test_ss_script.py` | 試験 | `WP-TEST-02`。偽の docker で `scripts/ss.sh` を回す |
 
 ## 9. 口の版 2 で足す名前（`WP-LOC-03`。[-locate.md](DetailedDesign-locate.md)）
 

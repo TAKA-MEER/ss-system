@@ -27,6 +27,7 @@
 | `WP-LOC-04` | 口の版 3（`depth_measured`） | `WP-EST-04` | 済み（2026-11-18 マージ） |
 | `WP-CAL-02` | カメラの取り付け（光軸に沿った距離・角度のずれ）と校正の道具 | `WP-CAL-01` | 済み（2026-11-18 マージ） |
 | `WP-CAL-03` | 校正の道具で外れた検出を捨てる | `WP-CAL-02` | 済み（2026-11-18 マージ） |
+| `WP-TEST-02` | ホストから起こすスクリプト（`scripts/ss.sh`）と `test_cli_busy` の揺れの直し | `WP-TEST-01`・`WP-CAL-03` | できる |
 
 先行試作は `../../lifting-lug-pose` の `9265d2d`。**試作のリポジトリは読むだけで、書き換えない。**
 
@@ -631,3 +632,51 @@ docker run --rm -v "$PWD":/ws ss-system:dev bash scripts/test.sh          # 0 �
 | `test_node_interface_version` | `status` の `interface_version` が `"2"` |
 
 **変異チェック（実装管理担当が自分で回す）**: (1) 上限を速さに関係なく `cleanup_timeout_s` にする、(2) 再起動のあと撮り直す、(3) 向きが読めないのに `LiftGoto` を出す、(4) `ceiling_unknown` を `camera_too_low` にまとめる、のそれぞれで試験が落ちること。
+
+## `WP-TEST-02` ホストから起こすスクリプト
+
+**状態: 2026-11-19 案。着手できる。**
+
+**読む節**: [-tester.md](DetailedDesign-tester.md) §2・§3・§7、[-names.md](DetailedDesign-names.md) §8・§11、`scripts/demo.sh`（書き方の手本）・`tests/test_demo_script.py`。
+
+| やること | 中身 |
+| --- | --- |
+| スクリプト | `scripts/ss.sh`（実行権限を付ける。`set -euo pipefail`）。[-tester.md](DetailedDesign-tester.md) §7 のとおり |
+| `.gitignore` | `out/` を足す |
+| 試験 | `tests/test_ss_script.py`。**偽の docker**（試験が一時フォルダに作る小さなスクリプト。受けた引数を 1 回 1 行で記録ファイルに足し、環境変数で決めた答えを返す: コンテナが動いているか・止まって残っているか・イメージが在るか・`locate_cli --status` の出力と終了コード・`exec`/`run` の終了コード）を `SS_DOCKER` で渡し、`subprocess` から呼ぶ。**本物の docker は呼ばない**ので、コンテナの中の `scripts/test.sh` で回る。待つ試験は `SS_START_WAIT_S` を小さくする |
+| 揺れの直し | `tests/test_locate_cli.py` の `test_cli_busy`（[ImplementationPlan.md](../ImplementationPlan.md) §6 の 4d。偽の hve だと最初の依頼がすぐ終わり、2 つ目が「別の依頼」にならないことがある）。**試験の側で最初の依頼を長くする**（偽の昇降機を遅くする・その試験だけの `rig` を使うなど）。`locator_node.py`・`locate_cli.py` は変えない |
+| 変えないもの | `ss_locator/` の中のコード・`config/locator.yaml`・`scripts/demo.sh` |
+
+**受け入れ条件**:
+
+```bash
+docker run --rm -v "$PWD":/ws ss-system:dev bash scripts/test.sh   # 0 で終わる（今までの試験も通る）
+bash -n scripts/ss.sh
+for i in $(seq 20); do docker run --rm -v "$PWD":/ws ss-system:dev bash -c \
+  ". /opt/ros/humble/setup.bash && cd ss_ws && colcon build >/dev/null && . install/setup.bash && cd /ws && \
+   python3 -m pytest -q ss_ws/src/ss_locator/tests/test_locate_cli.py -k busy"; done   # 20 回とも通る
+# 実装管理担当がホストで（本物の docker）:
+scripts/ss.sh start --fakes        # 状態の 1 行が出て 0
+scripts/ss.sh locate --yes         # 表と後片付けの完了が出て 0。out/ に png と json ができ、持ち主がホストの利用者
+scripts/ss.sh stop                 # 0。コンテナが残らない
+```
+
+| 試験 | 確かめること |
+| --- | --- |
+| `test_start_runs_node_with_params_file` | `start` の `docker run` に `-d`・`--name ss-system`・`--network host`・`--ipc host` が付き、`/ws` にリポジトリ直下が mount され、中のコマンドに `locator_node` と `--params-file ss_ws/src/ss_locator/config/locator.yaml` がある。`--rm` は付かない |
+| `test_start_overrides` | `--camera-host 192.168.5.129 --lift-host 10.0.0.2 --fakes` で `camera_host:=192.168.5.129`・`lift_host:=10.0.0.2`・`use_fakes:=true` が `--params-file` より後ろに付く。付けなければどれも付かない |
+| `test_start_refuses_when_running` | コンテナが動いていると 1 で終わり、`docker run` を呼ばない |
+| `test_start_removes_stale` | 止まったコンテナが残っていると、`docker rm` してから `docker run` する |
+| `test_start_needs_model` | `model/lug_v3_s.pt` が無いと 1 で終わり `docker run` を呼ばない。`--fakes` なら無くても起こす（モデルの在りかは環境変数 `SS_MODEL_PATH`（既定 `<リポジトリ直下>/model/lug_v3_s.pt`）で差し替える。手本は `SS_DEMO_DEV_DIR`） |
+| `test_start_waits_for_status` | 状態が 2 回目に読めると 0 で終わり、状態の 1 行が出る。上限まで読めないと 1 で終わり、`docker logs --tail 50` を呼ぶ |
+| `test_start_builds_image_when_missing` | イメージが無いと `docker build` を呼ぶ。在れば呼ばない |
+| `test_locate_adds_outputs` | `locate --yes` で `locate_cli` に `--yes` と `--plot out/<時刻>.png`・`--json out/<時刻>.json` が渡る。`--plot x.png` を付けるとそれだけが渡り、`out/` の分は足されない |
+| `test_locate_passes_exit_code` | `locate_cli` が 4 で終わると `ss.sh locate` も 4。終わったあと `chown` を呼ぶ |
+| `test_locate_not_running` | コンテナが動いていないと 1 で、`exec` を呼ばない |
+| `test_stop_refuses_while_busy` | 状態が `phase=SCANNING` なら 4 で終わり `docker stop` を呼ばない。`--force` なら呼ぶ。`phase=IDLE` なら呼んで、コンテナを消す |
+| `test_calib_refuses_while_running` | コンテナが動いていると 1 で、`docker run` を呼ばない。`--from <フォルダ>` だけなら動いていても起こす |
+| `test_calib_adds_params_and_out` | `calib --lugs 1,0;1,1 --poses 0:20` で `mount_calib` に `--params-file ss_ws/src/ss_locator/config/locator.yaml` と `--out out/calib-<時刻>` が足され、渡した引数もそのまま渡る。`--params-file`・`--out` を付ければ足さない |
+| `test_usage` | 引数なし・知らないやることで 2 |
+| `test_repo_root_from_anywhere` | 別のフォルダを作業場所にして呼んでも、`/ws` に mount されるのはリポジトリ直下 |
+
+**変異チェック（実装管理担当が自分で回す）**: (1) `start` で `--params-file` を落とす、(2) `stop` で `phase` を見ない、(3) `calib` で動いているかを見ない、(4) `locate` で `locate_cli` の終了コードを捨てて 0 にする、(5) `test_cli_busy` の直しを戻して 20 回回すと落ちることがある（直しが効いている）、のそれぞれで試験が落ちること。
