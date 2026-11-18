@@ -503,7 +503,7 @@ ros2 run ss_locator locate_cli --plot .briefs/tmp/top.png --json .briefs/tmp/res
 | `test_seam_diagonal_three` | 継ぎ目の 3 個（片方の列は 2 個、もう片方は 1 個）で、直角の組が選ばれる |
 | `test_back_to_back_gates` | 向きの差 15°・継ぎ目 0.4 m・重なり 30%・`k` = 2 で列の間 1.1 m（1 面にも 2 面にも合わない）のそれぞれで、まとめない |
 | `test_single_rect_unchanged` | 1 面だけの 4 個の盤は、今までと同じ値（中心・向き・幅・奥行き・`pos_std_m`・`yaw_std_deg`） |
-| `test_side_by_side_row` | 横に並んだ盤 3 面（金具の間隔 0.6 m・隣の盤の金具まで 0.135 m）の手前の列だけ（6 個）に、金具ごとに標準偏差 1 cm の誤差を足す。乱数の種を決めて 200 回 → 毎回 3 面 |
+| `test_side_by_side_row` | 横に並んだ盤 3 面（金具の間隔 0.6 m・隣の盤の金具まで 0.135 m）の手前の列だけ（6 個）に、金具ごとに標準偏差 2 cm の誤差を足す。乱数の種を決めて 200 回 → 毎回 3 面（1 cm でも、線から離れている確かめだけでは 200 回中 1 回落ちた） |
 | `test_two_lug_between` | 2 個の線分の途中に別の金具があれば組にしない |
 | `test_two_lug_pick_by_conf` | 同じ金具を 2 つの組に使わない |
 | 既存 | 試作との一致の試験（`assemble`）は直さずに通る。`locate_core`・ノードの試験で、金具 2 個の盤の値が変わったものは新しい値に直す（**何を直したかを報告に列挙する**） |
