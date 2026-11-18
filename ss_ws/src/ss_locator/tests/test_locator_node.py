@@ -625,7 +625,11 @@ def test_node_real_path_uses_camera_T(monkeypatch):
     )
     rig = Rig(
         parameter_overrides=_real_parameters(
-            lift_server, "127.0.0.1:%d" % camera_server.port
+            lift_server, "127.0.0.1:%d" % camera_server.port,
+            camera_optical_offset_m=0.07,
+            camera_pitch_offset_deg=-2.6,
+            camera_yaw_offset_deg=-5.4,
+            camera_roll_deg=4.1,
         )
     )
     try:
@@ -658,7 +662,11 @@ def test_node_real_path_uses_camera_T(monkeypatch):
         assert calls, "金具を床に戻す処理が呼ばれない"
         K, dist, T = calls[0]
         expected = geometry.camera_T(
-            0.15 + 0.05, math.radians(30.0), math.radians(35.0), 0.1, -0.2, 0.03
+            0.15 + 0.05, math.radians(30.0), math.radians(35.0), 0.1, -0.2, 0.03,
+            optical_offset_m=0.07,
+            pitch_offset_rad=math.radians(-2.6),
+            yaw_offset_rad=math.radians(-5.4),
+            roll_rad=math.radians(4.1),
         )
         assert np.allclose(T, expected)
         assert np.allclose(K, rig.node._camera_K)

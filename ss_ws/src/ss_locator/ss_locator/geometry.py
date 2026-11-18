@@ -57,22 +57,31 @@ def undistort_rays(px, K, dist, T, iters=20):
     return C, d_cam @ R          # (R^T d)^T = d^T R
 
 
-def camera_T(height_m, yaw_rad, pitch_down_rad, mount_x_m, mount_y_m, forward_offset_m):
+def camera_T(height_m, yaw_rad, pitch_down_rad, mount_x_m, mount_y_m, forward_offset_m,
+             optical_offset_m=0.0, pitch_offset_rad=0.0, yaw_offset_rad=0.0, roll_rad=0.0):
     """昇降機の高さ・ヨー・ピッチと取付の位置 → 外部パラメータ `base_link` → OpenCV カメラ (4×4)。
 
-    ヨーは機体の前が 0・左が正、ピッチは見下ろしが正。光学中心の床からの高さは `height_m`。
-    取付の位置はヨーの回転軸の `base_link` での位置 (`mount_x_m`, `mount_y_m`) と、
-    回転軸から光学中心までの前向きの距離 `forward_offset_m`。
+    ヨーは機体の前が 0・左が正、ピッチは見下ろしが正。`height_m` はピッチの回転軸の
+    床からの高さ。取付の位置はヨーの回転軸の `base_link` での位置 (`mount_x_m`, `mount_y_m`)、
+    回転軸からピッチの回転軸までの前向きの距離 `forward_offset_m` (a)、ピッチの回転軸から
+    光学中心までの光軸に沿った距離 `optical_offset_m` (b)。
+    `yaw_offset_rad` (δψ)・`pitch_offset_rad` (δθ) は応答の角度に足す取り付けのずれ、
+    `roll_rad` (φ) は光軸まわりの傾き（正 = カメラの右が下へ回る）。ずれはここで足す。
     """
-    cy, sy = np.cos(yaw_rad), np.sin(yaw_rad)
-    cp, sp = np.cos(pitch_down_rad), np.sin(pitch_down_rad)
+    yaw = yaw_rad + yaw_offset_rad
+    pitch = pitch_down_rad + pitch_offset_rad
+    cy, sy = np.cos(yaw), np.sin(yaw)
+    cp, sp = np.cos(pitch), np.sin(pitch)
     f = np.array([cy * cp, sy * cp, -sp])          # 前（OpenCV の z）
-    r = np.array([sy, -cy, 0.0])                   # 右（OpenCV の x）
-    d = np.cross(f, r)                             # 下（OpenCV の y）
+    r0 = np.array([sy, -cy, 0.0])                  # ズレなしの右（OpenCV の x）
+    d0 = np.cross(f, r0)                           # ズレなしの下（OpenCV の y）
+    cr, sr = np.cos(roll_rad), np.sin(roll_rad)
+    r = r0 * cr + d0 * sr
+    d = -r0 * sr + d0 * cr
     R = np.column_stack([r, d, f])                 # カメラ → base_link
     C = np.array([mount_x_m + forward_offset_m * cy,
                   mount_y_m + forward_offset_m * sy,
-                  height_m])
+                  height_m]) + optical_offset_m * f
     T = np.eye(4)
     T[:3, :3] = R.T
     T[:3, 3] = -R.T @ C

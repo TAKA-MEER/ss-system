@@ -12,6 +12,7 @@
 from __future__ import annotations
 
 import dataclasses
+import math
 import threading
 import time
 
@@ -201,6 +202,10 @@ class LocatorNode(Node):
         self.declare_parameter("camera_mount_y_m", 0.0)
         self.declare_parameter("camera_forward_offset_m", 0.0)
         self.declare_parameter("camera_height_offset_m", 0.0)
+        self.declare_parameter("camera_optical_offset_m", 0.0)
+        self.declare_parameter("camera_pitch_offset_deg", 0.0)
+        self.declare_parameter("camera_yaw_offset_deg", 0.0)
+        self.declare_parameter("camera_roll_deg", 0.0)
         self.declare_parameter("camera_K", DEFAULT_CAMERA_K)
         self.declare_parameter("camera_dist", DEFAULT_CAMERA_DIST)
 
@@ -260,6 +265,10 @@ class LocatorNode(Node):
         self.camera_mount_y_m = float(value("camera_mount_y_m"))
         self.camera_forward_offset_m = float(value("camera_forward_offset_m"))
         self.camera_height_offset_m = float(value("camera_height_offset_m"))
+        self.camera_optical_offset_m = float(value("camera_optical_offset_m"))
+        self.camera_pitch_offset_deg = float(value("camera_pitch_offset_deg"))
+        self.camera_yaw_offset_deg = float(value("camera_yaw_offset_deg"))
+        self.camera_roll_deg = float(value("camera_roll_deg"))
         self._camera_K = np.asarray(value("camera_K"), float).reshape(3, 3)
         self._camera_dist = np.asarray(value("camera_dist"), float)
 
@@ -469,6 +478,10 @@ class LocatorNode(Node):
             self.camera_mount_x_m,
             self.camera_mount_y_m,
             self.camera_forward_offset_m,
+            optical_offset_m=self.camera_optical_offset_m,
+            pitch_offset_rad=math.radians(self.camera_pitch_offset_deg),
+            yaw_offset_rad=math.radians(self.camera_yaw_offset_deg),
+            roll_rad=math.radians(self.camera_roll_deg),
         )
         return self._camera_K, self._camera_dist, T
 

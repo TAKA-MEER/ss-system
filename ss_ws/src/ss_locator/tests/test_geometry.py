@@ -24,6 +24,57 @@ def test_camera_T_axes():
     np.testing.assert_allclose(T30[1, :3], [-s, 0.0, -c], atol=1e-12)  # y = (-sin30, 0, -cos30)
 
 
+def test_camera_T_defaults_unchanged():
+    # 新しい引数がすべて 0 なら、今までの camera_T と同じ行列
+    for yaw, pitch in [(0.0, 0.0), (0.7, 0.35), (-2.0, 0.1)]:
+        got = G.camera_T(3.0, yaw, pitch, 0.1, -0.05, 0.2,
+                         optical_offset_m=0.0, pitch_offset_rad=0.0,
+                         yaw_offset_rad=0.0, roll_rad=0.0)
+        want = G.camera_T(3.0, yaw, pitch, 0.1, -0.05, 0.2)
+        np.testing.assert_allclose(got, want, atol=1e-12)
+
+
+def test_camera_T_optical_offset():
+    b = 0.06
+    for pitch_deg in (0.0, 30.0):
+        pitch = math.radians(pitch_deg)
+        base = G.camera_T(3.0, 0.4, pitch, 0.1, -0.05, 0.2)
+        with_b = G.camera_T(3.0, 0.4, pitch, 0.1, -0.05, 0.2, optical_offset_m=b)
+        Cb = -with_b[:3, :3].T @ with_b[:3, 3]
+        C0 = -base[:3, :3].T @ base[:3, 3]
+        f = np.array([math.cos(0.4) * math.cos(pitch), math.sin(0.4) * math.cos(pitch),
+                      -math.sin(pitch)])
+        np.testing.assert_allclose(Cb - C0, b * f, atol=1e-12)
+        np.testing.assert_allclose(with_b[:3, :3], base[:3, :3], atol=1e-12)
+
+
+def test_camera_T_roll():
+    phi = math.radians(5.0)
+    base = G.camera_T(3.0, 0.0, math.radians(20.0), 0.1, -0.05, 0.2)
+    rolled = G.camera_T(3.0, 0.0, math.radians(20.0), 0.1, -0.05, 0.2, roll_rad=phi)
+    # 光学中心は動かない
+    Cb = -rolled[:3, :3].T @ rolled[:3, 3]
+    C0 = -base[:3, :3].T @ base[:3, 3]
+    np.testing.assert_allclose(Cb, C0, atol=1e-12)
+    # カメラの右（x の base_link での向き = T の 1 行目）は下（-z）へ回る
+    np.testing.assert_allclose(base[0, :3], [0.0, -1.0, 0.0], atol=1e-12)
+    assert rolled[0, 2] < 0.0
+    np.testing.assert_allclose(
+        rolled[0, :3],
+        [-math.sin(math.radians(20.0)) * math.sin(phi), -math.cos(phi), -math.cos(math.radians(20.0)) * math.sin(phi)], atol=1e-9)
+    # 画像の中心の光線（前 z）はロールで変わらない
+    np.testing.assert_allclose(rolled[2, :3], base[2, :3], atol=1e-12)
+
+
+def test_camera_T_offsets_add():
+    dyaw, dpitch = math.radians(-3.0), math.radians(2.0)
+    got = G.camera_T(3.0, 0.5, 0.3, 0.1, -0.05, 0.2,
+                     pitch_offset_rad=dpitch, yaw_offset_rad=dyaw)
+    want = G.camera_T(3.0, 0.5 + dyaw, 0.3 + dpitch, 0.1, -0.05, 0.2)
+    # 光学中心の位置は応答の角度だけで決まるので、ずれの入った行列と一致する
+    np.testing.assert_allclose(got, want, atol=1e-12)
+
+
 def test_camera_T_center():
     height, mx, my, off = 3.0, 0.1, -0.05, 0.2
     for yaw in (0.0, math.pi / 2, math.radians(-135.0)):
