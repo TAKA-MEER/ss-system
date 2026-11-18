@@ -411,7 +411,7 @@ def test_single_rect_unchanged():
 
 
 def test_side_by_side_row():
-    # 横に並んだ盤 3 面の手前の列だけ（6 個）。金具ごとに標準偏差 1 cm の誤差を
+    # 横に並んだ盤 3 面の手前の列だけ（6 個）。金具ごとに標準偏差 2 cm の誤差を
     # 足して 200 回（乱数の種を決める）→ 毎回 3 面
     base = []
     for panel in range(3):
@@ -422,7 +422,7 @@ def test_side_by_side_row():
         lugs = []
         for lug in base:
             noisy = dict(lug)
-            noisy["p"] = np.asarray(lug["p"], float) + rng.normal(0.0, 0.01, size=2)
+            noisy["p"] = np.asarray(lug["p"], float) + rng.normal(0.0, 0.02, size=2)
             lugs.append(noisy)
         assert len(_tops([], lugs)) == 3
 
