@@ -9,8 +9,15 @@ locator_node:
     top_height_default_m: 2.35
     two_lug_spacing_min_m: 0.5
     two_lug_spacing_max_m: 0.8
-    two_lug_depth_default_m: 0.8
-    two_lug_depth_std_m: 0.06
+    two_lug_depth_default_m: 0.86
+    two_lug_depth_std_m: 0.046
+    panel_depth_min_m: 0.70
+    panel_depth_max_m: 1.02
+    back_to_back_gap_min_m: 0.05
+    back_to_back_gap_max_m: 0.30
+    merge_tol_m: 0.10
+    back_to_back_angle_tol_deg: 10.0
+    back_to_back_overlap_ratio: 0.5
     status_period_ms: 200
     cleanup_timeout_s: 30.0
     cleanup_margin_s: 10.0

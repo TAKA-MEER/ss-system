@@ -175,8 +175,15 @@ class LocatorNode(Node):
         self.declare_parameter("top_height_default_m", 2.35)
         self.declare_parameter("two_lug_spacing_min_m", 0.5)
         self.declare_parameter("two_lug_spacing_max_m", 0.8)
-        self.declare_parameter("two_lug_depth_default_m", 0.8)
-        self.declare_parameter("two_lug_depth_std_m", 0.06)
+        self.declare_parameter("two_lug_depth_default_m", 0.86)
+        self.declare_parameter("two_lug_depth_std_m", 0.046)
+        self.declare_parameter("panel_depth_min_m", 0.70)
+        self.declare_parameter("panel_depth_max_m", 1.02)
+        self.declare_parameter("back_to_back_gap_min_m", 0.05)
+        self.declare_parameter("back_to_back_gap_max_m", 0.30)
+        self.declare_parameter("merge_tol_m", 0.10)
+        self.declare_parameter("back_to_back_angle_tol_deg", 10.0)
+        self.declare_parameter("back_to_back_overlap_ratio", 0.5)
         self.declare_parameter("status_period_ms", 200)
         self.declare_parameter("cleanup_timeout_s", 30.0)
         self.declare_parameter("cleanup_margin_s", 10.0)
@@ -229,6 +236,13 @@ class LocatorNode(Node):
         self.two_lug_spacing_max_m = float(value("two_lug_spacing_max_m"))
         self.two_lug_depth_default_m = float(value("two_lug_depth_default_m"))
         self.two_lug_depth_std_m = float(value("two_lug_depth_std_m"))
+        self.panel_depth_min_m = float(value("panel_depth_min_m"))
+        self.panel_depth_max_m = float(value("panel_depth_max_m"))
+        self.back_to_back_gap_min_m = float(value("back_to_back_gap_min_m"))
+        self.back_to_back_gap_max_m = float(value("back_to_back_gap_max_m"))
+        self.merge_tol_m = float(value("merge_tol_m"))
+        self.back_to_back_angle_tol_deg = float(value("back_to_back_angle_tol_deg"))
+        self.back_to_back_overlap_ratio = float(value("back_to_back_overlap_ratio"))
         self.status_period_ms = int(value("status_period_ms"))
         self.cleanup_timeout_s = float(value("cleanup_timeout_s"))
         self.cleanup_margin_s = float(value("cleanup_margin_s"))
@@ -273,6 +287,13 @@ class LocatorNode(Node):
             "two_lug_spacing_max_m": self.two_lug_spacing_max_m,
             "two_lug_depth_default_m": self.two_lug_depth_default_m,
             "two_lug_depth_std_m": self.two_lug_depth_std_m,
+            "panel_depth_min_m": self.panel_depth_min_m,
+            "panel_depth_max_m": self.panel_depth_max_m,
+            "back_to_back_gap_min_m": self.back_to_back_gap_min_m,
+            "back_to_back_gap_max_m": self.back_to_back_gap_max_m,
+            "merge_tol_m": self.merge_tol_m,
+            "back_to_back_angle_tol_deg": self.back_to_back_angle_tol_deg,
+            "back_to_back_overlap_ratio": self.back_to_back_overlap_ratio,
             "scan_camera_height_m": self.scan_camera_height_m,
             "min_camera_height_m": self.min_camera_height_m,
             "scan_pitch_down_deg": self.scan_pitch_down_deg,

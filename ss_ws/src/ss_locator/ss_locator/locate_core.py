@@ -424,14 +424,19 @@ class LocateCore:
     def _finish(self, reason, now, restore=True):
         raw_panels, lugs = assemble.assemble(self._obs)
         top_height = float(self._get("top_height_default_m", 2.35))
-        tops = [panels.to_panel_top(p, lugs, top_height)
-                for p in raw_panels if int(p["n_lugs"]) >= 3]
-        tops += panels.two_lug_panels(
+        tops = panels.make_panel_tops(
             raw_panels, lugs, top_height,
             float(self._get("two_lug_spacing_min_m", 0.5)),
             float(self._get("two_lug_spacing_max_m", 0.8)),
-            float(self._get("two_lug_depth_default_m", 0.8)),
-            float(self._get("two_lug_depth_std_m", 0.06)),
+            float(self._get("two_lug_depth_default_m", 0.86)),
+            float(self._get("two_lug_depth_std_m", 0.046)),
+            float(self._get("panel_depth_min_m", 0.70)),
+            float(self._get("panel_depth_max_m", 1.02)),
+            float(self._get("back_to_back_gap_min_m", 0.05)),
+            float(self._get("back_to_back_gap_max_m", 0.30)),
+            float(self._get("merge_tol_m", 0.10)),
+            float(self._get("back_to_back_angle_tol_deg", 10.0)),
+            float(self._get("back_to_back_overlap_ratio", 0.5)),
         )
         found = panels.filter_panels(
             tops,
