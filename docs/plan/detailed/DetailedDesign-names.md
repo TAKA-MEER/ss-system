@@ -63,6 +63,9 @@
 | --- | --- | --- | --- |
 | `max_distance_default_m` | m | 5.0 | [Spec.md](../spec/Spec.md) §1.2「撮り方」（盤まで 5 m 以内） |
 | `top_height_default_m` | m | 2.35 | [Spec.md](../spec/Spec.md) §1.1「高さ」 |
+| `two_lug_spacing_min_m`・`two_lug_spacing_max_m` | m | 0.5・0.8 | [Spec.md](../spec/Spec.md) §1.2「金具の取り付け角」（2026-11-18 ユーザー決定。金具の中心どうしの間隔） |
+| `two_lug_depth_default_m` | m | 0.8 | **暫定**（金具 2 個の盤の奥行き。[Spec.md](../spec/Spec.md) §1.1。試作が想定する奥行き 0.6〜1.0 m の中央。**実際の盤の代表値をユーザーに確かめる**。`WP-EST-04`） |
+| `two_lug_depth_std_m` | m | 0.06 | **暫定**（奥行きを既定値にする分の中心の前後のばらつき。奥行きが 0.6〜1.0 m に一様なら中心のずれは ±0.1 m で、標準偏差 0.058 m。`WP-EST-04`） |
 | `status_period_ms` | ms | 200 | 暫定 |
 | `cleanup_timeout_s` | s | 30 | 暫定（**昇降の速さが分からないとき**の後片付けの上限。分かるときは [-locate.md](DetailedDesign-locate.md) §3 の式。過ぎたら手を離して `lift_restored: false`） |
 | `cleanup_margin_s` | s | 10 | **暫定**（版 2。後片付けの上限に足す余裕。`WP-LOC-03`） |

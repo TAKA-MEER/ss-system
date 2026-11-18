@@ -91,6 +91,30 @@
 **返す盤の絞り込み**: 中心の方位角が依頼の範囲に入り、`base_link` の原点からの水平距離が `max_distance_m` 以下の盤だけを返す。
 **金具が対角の 2 個だけの盤**（試作の `fit` が `diagonal` を付けたもの）も返す（[Spec.md](../spec/Spec.md) §1.1。2026-11-05 ユーザー決定）。中心は 2 個の中点、幅・奥行は試作どおり 2 個の距離 ÷ √2、`yaw_rad` は上の規則で選んだ辺、**`yaw_std_deg` は 90**、`front_known` は false。
 
+### 4.1 金具 2 個の盤（2026-11-18。[Spec.md](../spec/Spec.md) §1.2「金具の取り付け角」）
+
+**試作の組み立て（`assemble.assemble`）はそのまま回す**（試作との一致の試験を残す）。そのあとで、金具 2 個の盤だけを次の規則で組み直す。
+
+| # | やること |
+| --- | --- |
+| 1 | `assemble` の盤のうち、**金具 3〜4 個の盤はそのまま**返す（上の表）。金具 2 個の盤（対角を含む）は捨て、その金具を下の 2 の候補に戻す |
+| 2 | 3〜4 個の盤に入っていない金具から、2 個の組の候補を作る。条件は (a) 間隔 `d`（金具の中心どうし）が `two_lug_spacing_min_m`〜`two_lug_spacing_max_m`、(b) 2 個を結ぶ線分の途中にほかの金具が無い（`assemble._between`）、(c) **輪の向きの中心が向こう側**: `assemble._pair_center` の点 `c` が求まり、`(c − mid) · n > 0`。`mid` は 2 個の中点、`n` は 2 個を結ぶ線の法線のうち `mid · n > 0` の向き（機体の原点から遠ざかる向き） |
+| 3 | 候補を、確信度（`conf`）の和の大きい順に取る。取った組の金具を含む候補は捨てる |
+| 4 | 1 組を盤 1 面にする（下の表） |
+
+| `PanelTop` | 金具 2 個の盤での求め方 |
+| --- | --- |
+| `x_m`・`y_m` | `mid + n × (two_lug_depth_default_m / 2 − LUG_INSET)`（手前の辺は金具の線から `LUG_INSET` 手前） |
+| `yaw_rad` | `−n` の向き（手前の辺＝基準の辺。上の表の規則で選んでも同じになるはず） |
+| `width_m` | `d + 2 × LUG_INSET` |
+| `depth_m` | `two_lug_depth_default_m`（**測った値ではない**。版 3 で `depth_measured: false` を付ける。[-locate.md](DetailedDesign-locate.md) §2.3） |
+| `front_known`・`front_yaw_rad` | false・0 |
+| `lugs` | 2 |
+| `pos_std_m` | `sqrt( (s_pos₁² + s_pos₂²) / 4 + two_lug_depth_std_m² )`（奥行きを既定値にする分のばらつきを足す） |
+| `yaw_std_deg` | 上の表と同じ式 |
+
+**分かっていること**: 対角の 2 個も間隔が範囲に入れば手前の 2 個として返る（見分けない。spec のとおり）。間隔が範囲の外の 2 個は盤にしない（`lugs_ungrouped`）。
+
 `reason` の `no_lugs` と `lugs_ungrouped` の区別は、**範囲内で金具が 1 個でも床に戻せたか**で決める（[-locate.md](DetailedDesign-locate.md) §2.4）。
 
 ## 5. 依頼の流れ（`locate_core`）

@@ -23,6 +23,8 @@
 | `WP-DEMO-03` | 金具認識のリアルタイム表示に速さと入力の解像度を出す | `WP-DEMO-01` | できる |
 | `WP-LOC-03` | 口の版 2（理由 2 つ・後片付けの上限・`cleanup_limit_s`） | `WP-HVE-01` | 済み（2026-11-17 マージ） |
 | `WP-TEST-01` | 依頼を手で試す道具（テスト用の端末のコマンド） | `WP-LOC-03` | 済み（2026-11-17 マージ） |
+| `WP-EST-04` | 金具 2 個の盤を間隔と向こう側の判定で組む（口は変えない） | `WP-EST-02` | できる（2026-11-18） |
+| `WP-LOC-04` | 口の版 3（`depth_measured`） | `WP-EST-04` | **待ち**（fk-system の確認。[Spec-open.md](../spec/Spec-open.md) §1.2） |
 
 先行試作は `../../lifting-lug-pose` の `9265d2d`。**試作のリポジトリは読むだけで、書き換えない。**
 
@@ -468,6 +470,38 @@ ros2 run ss_locator locate_cli --plot .briefs/tmp/top.png --json .briefs/tmp/res
 | `test_cli_writes_plot_and_json` | `--plot`・`--json` のファイルができ、PNG が 800×800、JSON の `reason` が結果と同じ。付けなければファイルができない |
 
 **変異チェック（実装管理担当が自分で回す）**: (1) `locate_cli.py` で確認に `n` でも依頼を送る、(2) 取り消したあと後片付けの完了を待たずに終わる、(3) `cleanup_done` の依頼の ID を照らさない、(4) `locate_view.py` で度を rad に直さない、(5) 図の左右を逆にする、(6) `cleanup_limit_s` を無視して固定の時間で待つ、(7) 版の照合を `"1"` に戻す、のそれぞれで試験が落ちること。
+
+## `WP-EST-04` 金具 2 個の盤を間隔と向こう側の判定で組む
+
+**状態: 2026-11-18 案。**[Spec.md](../spec/Spec.md) §1.2「金具の取り付け角」。**口（`ss_msgs`）は変えない**（`depth_measured` は `WP-LOC-04`）。
+
+**読む節**: [-core.md](DetailedDesign-core.md) §4・§4.1、[-names.md](DetailedDesign-names.md) §3（パラメータ 4 つ）。
+
+| やること | 中身 |
+| --- | --- |
+| 純関数 | `panels.py` に `two_lug_panels`（[-core.md](DetailedDesign-core.md) §4.1 の 1〜4）と、2 個の組 → `PanelTop` と同じキーの dict。**`assemble.py` は変えない**（試作との一致の試験を残す） |
+| 呼び出し | `locate_core.py` の `assemble.assemble` の結果を `PanelTop` にしている所（`panels.to_panel_top`・`filter_panels` の直前）で、3〜4 個の盤と `two_lug_panels` の盤を合わせて返す。どちらも `filter_panels` を通す |
+| パラメータ | `two_lug_spacing_min_m`・`two_lug_spacing_max_m`・`two_lug_depth_default_m`・`two_lug_depth_std_m` を `locator_node`・`config/locator.yaml` に足し、`locate_core` まで渡す |
+| 試験 | 下の表 |
+| 合成データでの見積もり | 試作の材料（`proto_9265d2d.json` の 10 シーン）で、直す前と後の「金具 2 個の盤」の数・位置の誤差・向きの誤差を表にし、パケットの報告に書く（奥行きが既定値と違う盤では中心の前後がずれるのは分かっていてよい） |
+
+| 試験 | 確かめること |
+| --- | --- |
+| `test_two_lug_basic` | 機体の前 2 m に、間隔 0.53 m・輪の向きが中心を向く 2 個 → 盤 1 面。中心の左右が 2 個の中点、前後が `mid + n × (奥行き/2 − LUG_INSET)`、幅 0.53 + 2×`LUG_INSET`、奥行きが既定値、`front_known` false、`lugs` 2 |
+| `test_two_lug_spacing_gate` | 間隔 0.45 m・0.85 m では盤にならない。0.5 m・0.8 m ちょうどはなる |
+| `test_two_lug_far_side` | 輪の向きの中心が機体側（手前）にくる 2 個は盤にならない。**向きを 40° と 63° にずらした 2 個（実機の模擬天板の値）でも、中心が向こう側なら盤になる** |
+| `test_two_lug_real_mock` | 実機の模擬天板の 2 個（`p`・`axis`・`s_axis`・`s_pos` を [ImplementationPlan.md](../ImplementationPlan.md) §6 の 4a の値で固定）で盤 1 面。幅 ≈ 0.66 m |
+| `test_two_lug_keeps_3_4` | 金具 4 個の盤とその隣の 2 個 → 4 個の盤は今までと同じ値、2 個は新しい規則の盤。4 個の盤の金具は 2 個の組に使わない |
+| `test_two_lug_between` | 2 個の線分の途中に別の金具があれば組にしない |
+| `test_two_lug_pick_by_conf` | 金具 3 個が一直線（どの 2 個も条件を満たす）でも、同じ金具を 2 つの盤に使わない |
+| `test_two_lug_pos_std` | `pos_std_m` が `two_lug_depth_std_m` 以上 |
+| 既存 | 試作との一致の試験（`assemble`）は直さずに通る。`locate_core`・ノードの試験で、金具 2 個の盤の値が変わったものは、新しい規則の値に直す（**何を直したかを報告に列挙する**） |
+
+**変異チェック（実装管理担当が自分で回す）**: (1) 間隔の判定を外す、(2) 向こう側の判定の不等号を逆にする、(3) 奥行きの既定値を使わず 0 にする（中心が金具の線の上になる）、(4) 呼び出し側で `two_lug_panels` の結果を返す盤に足さない（**本番の経路を縛る**）、(5) 3〜4 個の盤の金具を 2 個の組の候補に入れる、のそれぞれで試験が落ちること。
+
+## `WP-LOC-04` 口の版 3（待ち）
+
+fk-system が `depth_measured`（[-locate.md](DetailedDesign-locate.md) §2.3）と版 3 への切り替えを確かめたら書く。
 
 ## `WP-LOC-03` 口の版 2
 
