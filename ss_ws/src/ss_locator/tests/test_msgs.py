@@ -16,6 +16,7 @@ def test_panel_top_fields():
         "lugs": "int32",
         "front_known": "boolean",
         "front_yaw_rad": "double",
+        "depth_measured": "boolean",
     }
 
 

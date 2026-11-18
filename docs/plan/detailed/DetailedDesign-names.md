@@ -48,7 +48,7 @@
 | 型 | 中身 |
 | --- | --- |
 | `LocatePanels.action` | 依頼: `float32 azimuth_from_rad` / `float32 azimuth_span_rad` / `float32 max_distance_m` / `float32 time_limit_s` ― 結果: `std_msgs/Header header` / `string reason` / `PanelTop[] panels` / `float32[] seen_from_rad` / `float32[] seen_span_rad` / `float32 cleanup_limit_s`（版 2） ― 途中経過: `string phase` |
-| `PanelTop.msg` | `float64 x_m` / `float64 y_m` / `float32 top_height_m` / `bool height_measured` / `float64 yaw_rad` / `float32 width_m` / `float32 depth_m` / `float32 pos_std_m` / `float32 yaw_std_deg` / `int32 lugs` / `bool front_known` / `float64 front_yaw_rad` |
+| `PanelTop.msg` | `float64 x_m` / `float64 y_m` / `float32 top_height_m` / `bool height_measured` / `float64 yaw_rad` / `float32 width_m` / `float32 depth_m` / `float32 pos_std_m` / `float32 yaw_std_deg` / `int32 lugs` / `bool front_known` / `float64 front_yaw_rad` / `bool depth_measured`（版 3） |
 | `CleanupDone.msg` | `std_msgs/Header header` / `unique_identifier_msgs/UUID goal_id` / `string reason` / `bool lift_restored` |
 | `LocatorStatus.msg` | `std_msgs/Header header` / `string interface_version` / `string phase` / `unique_identifier_msgs/UUID goal_id` / `string last_reject_reason` |
 
