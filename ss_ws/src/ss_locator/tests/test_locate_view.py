@@ -10,6 +10,7 @@ from ss_locator import locate_view as lv
 def panel(**overrides):
     values = {
         "x_m": 2.413, "y_m": 0.310, "top_height_m": 2.35, "height_measured": False,
+        "depth_measured": True,
         "yaw_rad": math.radians(178.2), "width_m": 0.8, "depth_m": 0.6,
         "pos_std_m": 0.04, "yaw_std_deg": 2.1, "lugs": 4,
         "front_known": False, "front_yaw_rad": 0.0,
@@ -95,6 +96,20 @@ def test_format_result_empty():
     assert "something_new" in unknown
 
 
+def test_format_result_depth_mark():
+    unmeasured = panel(depth_m=0.86, depth_measured=False)
+    measured = panel(depth_measured=True)
+    text = lv.format_result(result([unmeasured, measured]))
+    rows = [l for l in text.splitlines() if l.startswith(" 1 ") or l.startswith(" 2 ")]
+    assert "0.86*" in rows[0]
+    assert "0.60*" not in rows[1]
+    assert "*" in text.splitlines()[-2]  # 後片付けの上限の行の前
+    assert text.splitlines()[-2] == "* 奥行きは測っていない（既定値）"
+
+    text_all = lv.format_result(result([measured]))
+    assert "*" not in text_all
+
+
 def test_format_seen_ranges():
     text = lv.format_seen_ranges([0.0, math.radians(90)], [math.radians(30), math.radians(45)])
     assert "+0.0°〜+30.0°" in text
@@ -119,8 +134,8 @@ def test_cleanup_wait_limit_s():
 def test_format_cleanup_and_status():
     c = lv.format_cleanup({"reason": "completed", "lift_restored": True})
     assert "completed" in c and "True" in c
-    s = lv.format_status({"interface_version": "2", "phase": "IDLE", "last_reject_reason": ""})
-    assert "2" in s and "IDLE" in s
+    s = lv.format_status({"interface_version": "3", "phase": "IDLE", "last_reject_reason": ""})
+    assert "3" in s and "IDLE" in s
 
 
 def _diff(a, b):

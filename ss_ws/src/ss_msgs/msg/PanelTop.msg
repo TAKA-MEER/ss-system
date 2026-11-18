@@ -10,3 +10,4 @@ float32 yaw_std_deg
 int32 lugs
 bool front_known
 float64 front_yaw_rad
+bool depth_measured

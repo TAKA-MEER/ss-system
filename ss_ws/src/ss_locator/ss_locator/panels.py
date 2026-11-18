@@ -70,6 +70,7 @@ def to_panel_top(panel, lugs, top_height_m):
         "y_m": cy,
         "top_height_m": float(top_height_m),
         "height_measured": False,
+        "depth_measured": True,  # 3〜4 個の盤は両方の列を測った
         "yaw_rad": yaw_rad,
         "width_m": width_m,
         "depth_m": depth_m,

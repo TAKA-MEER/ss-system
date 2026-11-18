@@ -228,7 +228,59 @@ def test_node_interface_version():
     try:
         rig.wait_until(lambda: len(rig.statuses) >= 1, 3.0, "status が来ない")
         with rig.lock:
-            assert rig.statuses[-1][1].interface_version == "2"
+            assert rig.statuses[-1][1].interface_version == "3"
+    finally:
+        rig.close()
+
+
+def _panel_dict(depth_measured):
+    return {
+        "x_m": 2.0, "y_m": 0.0, "top_height_m": 2.35, "height_measured": False,
+        "depth_measured": depth_measured, "yaw_rad": 0.0, "width_m": 0.8,
+        "depth_m": 0.9, "pos_std_m": 0.04, "yaw_std_deg": 2.1, "lugs": 4,
+        "front_known": False, "front_yaw_rad": 0.0,
+    }
+
+
+def test_node_result_depth_measured():
+    rig = Rig()
+    try:
+        goal_handle = rig.send_goal()
+        assert goal_handle.accepted
+        result = rig.get_result(goal_handle)
+        assert result.reason == "completed"
+        assert len(result.panels) >= 1
+        for panel in result.panels:
+            assert isinstance(panel.depth_measured, bool)
+
+        # `make_panel_tops` の返す盤と同じキーの dict（true と false の両方）を通し、
+        # 口の値がそのまま出ることを確かめる
+        from types import SimpleNamespace
+
+        tops = [_panel_dict(True), _panel_dict(False)]
+        command = SimpleNamespace(
+            reason="completed", panels=tops, seen_from=[], seen_span=[],
+            cleanup_limit_s=1.0,
+        )
+        made = rig.node._make_result(command)
+        assert [panel.depth_measured for panel in made.panels] == [True, False]
+    finally:
+        rig.close()
+
+
+def test_node_result_missing_depth_measured():
+    rig = Rig()
+    try:
+        from types import SimpleNamespace
+
+        top = _panel_dict(True)
+        del top["depth_measured"]
+        command = SimpleNamespace(
+            reason="completed", panels=[top], seen_from=[], seen_span=[],
+            cleanup_limit_s=1.0,
+        )
+        with pytest.raises(KeyError):
+            rig.node._make_result(command)
     finally:
         rig.close()
 
@@ -289,7 +341,7 @@ def test_node_status_period():
         with rig.lock:
             samples = list(rig.statuses)
 
-        assert all(message.interface_version == "2" for _, message in samples)
+        assert all(message.interface_version == "3" for _, message in samples)
         assert samples[-1][1].phase == "IDLE"
 
         times = [stamp for stamp, _ in samples]

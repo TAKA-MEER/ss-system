@@ -13,8 +13,8 @@ import math
 import cv2
 import numpy as np
 
-# この道具が知っている口の版（-tester.md §3 の 2）
-INTERFACE_VERSION = "2"
+# この道具が知っている口の版（-tester.md §3 の 3）
+INTERFACE_VERSION = "3"
 
 DEFAULT_MAX_DISTANCE_M = 5.0
 IMAGE_SIZE = 800
@@ -110,10 +110,13 @@ def _panel_row(index, panel):
     yaw_std = float(panel["yaw_std_deg"])
     yaw_std_text = "不明" if yaw_std >= YAW_UNKNOWN_DEG else f"{yaw_std:.1f}"
     front = f"{_deg(panel['front_yaw_rad']):.1f}" if panel.get("front_known") else "-"
+    depth_text = f"{float(panel['depth_m']):6.2f}"
+    if not panel.get("depth_measured", True):
+        depth_text += "*"
     return (
         f"{index:2d} {x:7.3f} {y:7.3f} {bearing:7.1f} {distance:7.2f} "
         f"{_deg(panel['yaw_rad']):7.1f} {float(panel['width_m']):6.2f} "
-        f"{float(panel['depth_m']):6.2f} {float(panel['pos_std_m']):8.2f} "
+        f"{depth_text} {float(panel['pos_std_m']):8.2f} "
         f"{yaw_std_text:>7} {int(panel['lugs']):4d} {front:>5}"
     )
 
@@ -128,6 +131,8 @@ def format_result(result):
         lines.append(TABLE_HEADER)
         for i, panel in enumerate(panels, start=1):
             lines.append(_panel_row(i, panel))
+        if any(not p.get("depth_measured", True) for p in panels):
+            lines.append("* 奥行きは測っていない（既定値）")
     else:
         lines.append(f"盤は見つかりませんでした: {format_reason(reason)}")
     lines.append(f"後片付けの上限: {float(result.get('cleanup_limit_s', 0.0)):.1f} s")

@@ -48,7 +48,7 @@ from .locate_core import (
     Tick,
 )
 
-INTERFACE_VERSION = "2"
+INTERFACE_VERSION = "3"
 
 ACTION_NAME = "/ss/locate/panels"
 CLEANUP_TOPIC = "/ss/locate/cleanup_done"
@@ -509,6 +509,7 @@ class LocatorNode(Node):
             panel.y_m = float(top["y_m"])
             panel.top_height_m = float(top["top_height_m"])
             panel.height_measured = bool(top["height_measured"])
+            panel.depth_measured = bool(top["depth_measured"])
             panel.yaw_rad = float(top["yaw_rad"])
             panel.width_m = float(top["width_m"])
             panel.depth_m = float(top["depth_m"])
