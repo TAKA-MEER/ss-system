@@ -7,7 +7,7 @@ import math
 
 import numpy as np
 
-from .assemble import _line_dist
+from .assemble import LUG_INSET, _between, _line_dist, _pair_center
 from .scan_plan import normalize
 
 TAU = 2.0 * math.pi
@@ -79,6 +79,81 @@ def to_panel_top(panel, lugs, top_height_m):
         "front_known": front_known,
         "front_yaw_rad": normalize(front) if front_known else 0.0,
     }
+
+
+def _two_lug_top(lug_a, lug_b, top_height_m, depth_default_m, depth_std_m):
+    """金具 2 個の組 → `PanelTop` と同じキーの dict（-core.md §4.1 の 4）。"""
+    pa = np.asarray(lug_a["p"], float)
+    pb = np.asarray(lug_b["p"], float)
+    mid = (pa + pb) / 2.0
+    e = pb - pa
+    d = float(np.linalg.norm(e))
+    e = e / d
+    n = np.array([-e[1], e[0]])
+    if float(mid @ n) <= 0.0:
+        n = -n  # 機体の原点から遠ざかる向き
+    center = mid + n * (float(depth_default_m) / 2.0 - LUG_INSET)
+    width_m = d + 2.0 * LUG_INSET
+    s_pos = [float(lug_a["s_pos"]), float(lug_b["s_pos"])]
+    pos_std_m = math.sqrt(sum(s * s for s in s_pos) / 4.0 + float(depth_std_m) ** 2)
+    mean_s_pos = sum(s_pos) / 2.0
+    return {
+        "x_m": float(center[0]),
+        "y_m": float(center[1]),
+        "top_height_m": float(top_height_m),
+        "height_measured": False,
+        "yaw_rad": normalize(math.atan2(-float(n[1]), -float(n[0]))),
+        "width_m": float(width_m),
+        "depth_m": float(depth_default_m),
+        "pos_std_m": float(pos_std_m),
+        "yaw_std_deg": math.degrees(math.atan(math.sqrt(2.0) * mean_s_pos / width_m)),
+        "lugs": 2,
+        "front_known": False,
+        "front_yaw_rad": 0.0,
+    }
+
+
+def two_lug_panels(raw_panels, lugs, top_height_m, spacing_min_m, spacing_max_m,
+                   depth_default_m, depth_std_m):
+    """`assemble` の盤のうち金具 2 個の盤（対角を含む）を捨て、その金具を候補に戻し、
+    間隔と向こう側の判定で組み直した `PanelTop` と同じキーの dict の並びを返す
+    （-core.md §4.1 の 1〜4）。金具 3〜4 個の盤は呼び出し側が `to_panel_top` で返す。"""
+    used = {i for panel in raw_panels if int(panel["n_lugs"]) >= 3 for i in panel["lugs"]}
+    pool = [i for i in range(len(lugs)) if i not in used]
+    candidates = []
+    for ai in range(len(pool)):
+        for bi in range(ai + 1, len(pool)):
+            i, j = pool[ai], pool[bi]
+            a, b = lugs[i], lugs[j]
+            pa = np.asarray(a["p"], float)
+            pb = np.asarray(b["p"], float)
+            d = float(np.linalg.norm(pb - pa))
+            if not float(spacing_min_m) <= d <= float(spacing_max_m):
+                continue
+            if _between(lugs, range(len(lugs)), i, j):
+                continue
+            c = _pair_center(a, b)
+            if c is None:
+                continue
+            mid = (pa + pb) / 2.0
+            e = (pb - pa) / d
+            n = np.array([-e[1], e[0]])
+            if float(mid @ n) <= 0.0:
+                n = -n
+            if float((np.asarray(c, float) - mid) @ n) <= 0.0:
+                continue
+            candidates.append((float(a["conf"]) + float(b["conf"]), i, j))
+    candidates.sort(key=lambda item: -item[0])
+    taken = set()
+    tops = []
+    for _, i, j in candidates:
+        if i in taken or j in taken:
+            continue
+        taken.add(i)
+        taken.add(j)
+        tops.append(_two_lug_top(lugs[i], lugs[j], top_height_m,
+                                 depth_default_m, depth_std_m))
+    return tops
 
 
 def filter_panels(tops, azimuth_from_rad, azimuth_span_rad, max_distance_m):
