@@ -108,6 +108,7 @@
 | 形 | 1 本の bash スクリプト `scripts/ss.sh <やること> [引数]`。どこから呼んでもリポジトリ直下を `/ws` に mount する |
 | コンテナ | 本システムは名前 `ss-system` のコンテナで 1 つだけ動かす（`docker run -d`。`--rm` は付けない。落ちたあとも `logs` で読めるように）。`--network host`・`--ipc host`（実機のカメラ・昇降部に届き、同じ機械の ROS 2 からも見える）。ホストに `ROS_DOMAIN_ID` があれば渡す |
 | 設定 | **`locator_node` には必ず `--params-file ss_ws/src/ss_locator/config/locator.yaml` を渡す**（渡さないと合成データの値で動く）。引数での上書きはそのうしろに `-p` で足す |
+| コンテナの中のコマンド | **どれも `/ws` で動かす**（`locator.yaml` のモデル・材料のパスはリポジトリ直下からの相対）。`docker exec` で打つもの（`status`・`locate`・`stop` と `start` の待ち）は、`/opt/ros/humble/setup.bash` と `/ws/ss_ws/install/setup.bash` を読んでから `cd /ws` して `ros2 run ss_locator locate_cli …`。`locator_node` のコンテナには `PYTHONUNBUFFERED=1` を渡す（`logs` に出が溜まらないように） |
 | 書き出し | 依頼の結果は `out/`（リポジトリ直下。gitignore）に時刻の名前で書く。コンテナは root で動くので、書いたあとにホストの利用者の持ち物に直す（`chown`） |
 | docker の差し替え | 試験のため、呼ぶ docker を環境変数 `SS_DOCKER`（既定 `docker`）で差し替えられる。この名前は試験のためだけのもの |
 
@@ -118,7 +119,7 @@
 | `locate [locate_cli の引数]` | 引数を `locate_cli` にそのまま渡す。**`--plot`・`--json` が無ければ `out/<YYYYmmdd-HHMMSS>.png`・`.json` を足す**。端末なら `docker exec -it`（確認の入力と Ctrl+C を通す）。終わったら書いたファイルの持ち主を直し、パスを出す | `locate_cli` のまま。動いていなければ 1 |
 | `logs [-f]` | `docker logs`（`-f` は渡す） | docker のまま |
 | `stop [--force]` | 状態の `phase` が `IDLE` でなければ止めない（**依頼の最中に止めると、昇降機を元の高さに戻さない**）。`--force` なら止める。状態が読めないときは止める。止めたらコンテナを消す | 0 止めた（動いていなかった）・4 依頼の最中 |
-| `calib [mount_calib の引数]` | **`ss-system` が動いていれば撮らない**（どちらもカメラを動かすため。`--from` だけのときは動いていてもよい）。別のコンテナ（`docker run --rm`、`--network host`）で `mount_calib` を起こす。**`--params-file` が無ければ `ss_ws/src/ss_locator/config/locator.yaml` を足す**。`--out`・`--from` がどちらも無ければ `--out out/calib-<時刻>` を足す。終わったら `out/` の持ち主を直す | `mount_calib` のまま。動いているので撮れない → 1 |
+| `calib [mount_calib の引数]` | **`ss-system` が動いていれば撮らない**（どちらもカメラを動かすため。`--from` だけのときは動いていてもよい）。別のコンテナ（`docker run --rm`、`--network host`。端末なら `-it`）で `mount_calib` を起こす。**`colcon build` はしない**（動いている `locator_node` の `ss_ws/build`・`install` を書き換えないため）。`cd /ws && PYTHONPATH=ss_ws/src/ss_locator python3 -m ss_locator.mount_calib …` で起こす。**`--params-file` が無ければ `ss_ws/src/ss_locator/config/locator.yaml` を足す**。`--out`・`--from` がどちらも無ければ `--out out/calib-<時刻>` を足す。終わったら `out/` の持ち主を直す | `mount_calib` のまま。動いているので撮れない → 1 |
 | それ以外・引数なし | 使い方を出す | 2 |
 
 ## 8. この案で決めないもの

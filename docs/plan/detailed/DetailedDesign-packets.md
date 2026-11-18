@@ -644,7 +644,7 @@ docker run --rm -v "$PWD":/ws ss-system:dev bash scripts/test.sh          # 0 �
 | スクリプト | `scripts/ss.sh`（実行権限を付ける。`set -euo pipefail`）。[-tester.md](DetailedDesign-tester.md) §7 のとおり |
 | `.gitignore` | `out/` を足す |
 | 試験 | `tests/test_ss_script.py`。**偽の docker**（試験が一時フォルダに作る小さなスクリプト。受けた引数を 1 回 1 行で記録ファイルに足し、環境変数で決めた答えを返す: コンテナが動いているか・止まって残っているか・イメージが在るか・`locate_cli --status` の出力と終了コード・`exec`/`run` の終了コード）を `SS_DOCKER` で渡し、`subprocess` から呼ぶ。**本物の docker は呼ばない**ので、コンテナの中の `scripts/test.sh` で回る。待つ試験は `SS_START_WAIT_S` を小さくする |
-| 揺れの直し | `tests/test_locate_cli.py` の `test_cli_busy`（[ImplementationPlan.md](../ImplementationPlan.md) §6 の 4d。偽の hve だと最初の依頼がすぐ終わり、2 つ目が「別の依頼」にならないことがある）。**試験の側で最初の依頼を長くする**（偽の昇降機を遅くする・その試験だけの `rig` を使うなど）。`locator_node.py`・`locate_cli.py` は変えない |
+| 揺れの直し | `tests/test_locate_cli.py` の `test_cli_busy`（[ImplementationPlan.md](../ImplementationPlan.md) §6 の 4d。偽の hve だと最初の依頼がすぐ終わり、2 つ目が「別の依頼」にならないことがある）。**試験の側で、試験が放すまで最初の依頼を `IDLE` に戻さない**（時間で長くするだけでは揺れが残る。手本は同じファイルの `SilentCleanupNode`: ノードの子クラスで偽の昇降機を差し替え、`threading.Event` が立つまで着かないようにするなど）。`locator_node.py`・`locate_cli.py` は変えない |
 | 変えないもの | `ss_locator/` の中のコード・`config/locator.yaml`・`scripts/demo.sh` |
 
 **受け入れ条件**:
@@ -652,9 +652,9 @@ docker run --rm -v "$PWD":/ws ss-system:dev bash scripts/test.sh          # 0 �
 ```bash
 docker run --rm -v "$PWD":/ws ss-system:dev bash scripts/test.sh   # 0 で終わる（今までの試験も通る）
 bash -n scripts/ss.sh
-for i in $(seq 20); do docker run --rm -v "$PWD":/ws ss-system:dev bash -c \
+docker run --rm -v "$PWD":/ws ss-system:dev bash -c \
   ". /opt/ros/humble/setup.bash && cd ss_ws && colcon build >/dev/null && . install/setup.bash && cd /ws && \
-   python3 -m pytest -q ss_ws/src/ss_locator/tests/test_locate_cli.py -k busy"; done   # 20 回とも通る
+   for i in \$(seq 20); do python3 -m pytest -q ss_ws/src/ss_locator/tests/test_locate_cli.py -k busy || exit 1; done"   # 20 回とも通る
 # 実装管理担当がホストで（本物の docker）:
 scripts/ss.sh start --fakes        # 状態の 1 行が出て 0
 scripts/ss.sh locate --yes         # 表と後片付けの完了が出て 0。out/ に png と json ができ、持ち主がホストの利用者
@@ -676,7 +676,9 @@ scripts/ss.sh stop                 # 0。コンテナが残らない
 | `test_stop_refuses_while_busy` | 状態が `phase=SCANNING` なら 4 で終わり `docker stop` を呼ばない。`--force` なら呼ぶ。`phase=IDLE` なら呼んで、コンテナを消す |
 | `test_calib_refuses_while_running` | コンテナが動いていると 1 で、`docker run` を呼ばない。`--from <フォルダ>` だけなら動いていても起こす |
 | `test_calib_adds_params_and_out` | `calib --lugs 1,0;1,1 --poses 0:20` で `mount_calib` に `--params-file ss_ws/src/ss_locator/config/locator.yaml` と `--out out/calib-<時刻>` が足され、渡した引数もそのまま渡る。`--params-file`・`--out` を付ければ足さない |
+| `test_exec_sources_and_cwd` | `status`・`locate` の `docker exec` のコマンドに `/opt/ros/humble/setup.bash`・`/ws/ss_ws/install/setup.bash` と `cd /ws` がある。`start` の `docker run` に `PYTHONUNBUFFERED=1` が付く |
+| `test_calib_no_build` | `calib` の `docker run` のコマンドに `colcon` が無く、`PYTHONPATH=ss_ws/src/ss_locator` と `ss_locator.mount_calib` がある |
 | `test_usage` | 引数なし・知らないやることで 2 |
 | `test_repo_root_from_anywhere` | 別のフォルダを作業場所にして呼んでも、`/ws` に mount されるのはリポジトリ直下 |
 
-**変異チェック（実装管理担当が自分で回す）**: (1) `start` で `--params-file` を落とす、(2) `stop` で `phase` を見ない、(3) `calib` で動いているかを見ない、(4) `locate` で `locate_cli` の終了コードを捨てて 0 にする、(5) `test_cli_busy` の直しを戻して 20 回回すと落ちることがある（直しが効いている）、のそれぞれで試験が落ちること。
+**変異チェック（実装管理担当が自分で回す）**: (1) `start` で `--params-file` を落とす、(2) `stop` で `phase` を見ない、(3) `calib` で動いているかを見ない、(4) `locate` で `locate_cli` の終了コードを捨てて 0 にする、(5) `calib` で `colcon build` する、(6) `test_cli_busy` で最初の依頼を放すのを試験の 2 つ目の依頼の前にする（直しが効いていれば落ちる）、のそれぞれで試験が落ちること。
