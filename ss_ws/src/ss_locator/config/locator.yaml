@@ -37,9 +37,9 @@ locator_node:
     camera_optical_offset_m: 0.06
     camera_height_offset_m: 1.82
     # 取り付けの角度のずれ。校正の道具 mount_calib で求めてここに写す。
-    camera_pitch_offset_deg: -2.6
-    camera_yaw_offset_deg: -5.4
-    camera_roll_deg: 4.1
+    camera_pitch_offset_deg: 0.3
+    camera_yaw_offset_deg: -1.0
+    camera_roll_deg: 3.9
     # hve のカメラモジュール（UnitV2）の 1280×720 の静止画で校正した値（WP-CAL-01。2026-11-18）。
     # チェッカーボード 9×6 交点・1 マス 23.7 mm、31 枚、再投影誤差 0.41 px、fx のばらつき ±22 px。
     # 偽のカメラは材料（fixture）の K を使うので、この値には影響されない。

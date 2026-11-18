@@ -108,7 +108,7 @@
 | `camera_forward_offset_m` | m | 0.08 | **実測**（2026-11-18 ユーザー。ヨーの回転軸からピッチの回転軸まで、水平・前向き。2026-11-18 に「光学中心まで」から改めた） |
 | `camera_optical_offset_m` | m | 0.06 | **実測**（2026-11-18 ユーザー。ピッチの回転軸から光学中心まで、光軸に沿って前。`WP-CAL-02` で足す） |
 | `camera_height_offset_m` | m | 1.82 | **実測**（2026-11-18 ユーザー。昇降量 0 のときピッチの回転軸は床から 1.82 m。昇降部の配信値からピッチの回転軸の床からの高さへ。2026-11-18 に「光学中心」から改めた） |
-| `camera_pitch_offset_deg`・`camera_yaw_offset_deg`・`camera_roll_deg` | ° | −2.6・−5.4・+4.1 | **校正の道具で求める**（[-core.md](DetailedDesign-core.md) §2・§2.1。既定は 2026-11-18 の模擬天板で当てはめた目安。`WP-CAL-02` で足す） |
+| `camera_pitch_offset_deg`・`camera_yaw_offset_deg`・`camera_roll_deg` | ° | +0.3・−1.0・+3.9 | **校正の道具で求める**（[-core.md](DetailedDesign-core.md) §2・§2.1。`WP-CAL-02` で足す）。値は 2026-11-18 の 3 回目の当てはめ（測定用のスマートフォンが触れ、0° を合わせ直したあと。1 回目は −2.6・−5.4・+4.1）。**触れた・0° を合わせ直した・再起動したら当てはめ直す**（hve の答え。[Spec-open.md](../spec/Spec-open.md) §1.2） |
 | `camera_K`・`camera_dist` | — | 偽のカメラは合成データの値 | **`WP-CAL-01` で校正** |
 | `use_fakes` | — | false | 偽の昇降機・カメラ・検出器を使う（試験・hve とつなぐ前の動作確認だけ。[-packets.md](DetailedDesign-packets.md) `WP-LOC-01`） |
 | `fake_fixture` | — | `ss_ws/src/ss_locator/tests/fixtures/proto_9265d2d.json` | 偽のカメラ・検出器の材料（`WP-EST-01`） |
