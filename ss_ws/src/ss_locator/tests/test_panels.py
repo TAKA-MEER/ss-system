@@ -410,6 +410,23 @@ def test_single_rect_unchanged():
     assert got["depth_measured"] is True
 
 
+def test_side_by_side_row():
+    # 横に並んだ盤 3 面の手前の列だけ（6 個）。金具ごとに標準偏差 1 cm の誤差を
+    # 足して 200 回（乱数の種を決める）→ 毎回 3 面
+    base = []
+    for panel in range(3):
+        y0 = panel * 0.735
+        base += _pair_at(2.0, y_lo=y0, y_hi=y0 + 0.6, target=(2.3, y0 + 0.3))
+    rng = np.random.default_rng(12)
+    for _ in range(200):
+        lugs = []
+        for lug in base:
+            noisy = dict(lug)
+            noisy["p"] = np.asarray(lug["p"], float) + rng.normal(0.0, 0.01, size=2)
+            lugs.append(noisy)
+        assert len(_tops([], lugs)) == 3
+
+
 def test_two_lug_between():
     lugs = _far_pair((2.0, -0.265), (2.0, 0.265))
     lugs.append(_lug_toward((2.0, 0.0), (2.3, 0.0)))
