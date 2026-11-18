@@ -233,6 +233,18 @@ def test_node_interface_version():
         rig.close()
 
 
+def test_node_two_lug_parameters():
+    rig = Rig()
+    try:
+        params = rig.node._core_parameters()
+        assert params["two_lug_spacing_min_m"] == pytest.approx(0.5)
+        assert params["two_lug_spacing_max_m"] == pytest.approx(0.8)
+        assert params["two_lug_depth_default_m"] == pytest.approx(0.8)
+        assert params["two_lug_depth_std_m"] == pytest.approx(0.06)
+    finally:
+        rig.close()
+
+
 def test_node_busy_reject():
     rig = Rig()
     try:

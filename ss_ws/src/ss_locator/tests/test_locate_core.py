@@ -42,6 +42,10 @@ def make_params(**overrides):
     params = {
         "max_distance_default_m": 5.0,
         "top_height_default_m": 2.35,
+        "two_lug_spacing_min_m": 0.5,
+        "two_lug_spacing_max_m": 0.8,
+        "two_lug_depth_default_m": 0.8,
+        "two_lug_depth_std_m": 0.06,
         "scan_camera_height_m": 3.10,
         "min_camera_height_m": 2.95,
         "scan_pitch_down_deg": 20.0,
@@ -944,3 +948,26 @@ def test_core_cleanup_limit_includes_yaw():
     drive.camera(2.0, yaw_rad=math.pi, yaw_speed_rad_s=math.radians(20.0))
     drive.step(Cancel(), 2.5)
     assert drive.result().cleanup_limit_s == pytest.approx(30.0)
+
+
+def test_two_lug_in_core():
+    # `two_lug_panels` の結果を返す盤に足す（本番の経路の試験）
+    drive = Drive(settle_s=0.0)
+    drive.camera(2.0, arrived=True)
+    assert has(drive.commands, RequestFrame)
+    obs = [
+        {"view": 0, "p": np.array([2.0, -0.265]), "axis": 41.0, "s_axis": 3.0,
+         "s_pos": 0.003, "conf": 0.9, "dist": 3.0},
+        {"view": 0, "p": np.array([2.0, 0.265]), "axis": 139.0, "s_axis": 3.0,
+         "s_pos": 0.003, "conf": 0.9, "dist": 3.0},
+    ]
+    drive.step(FrameDone(0.0, obs, True), 2.5)
+    drive.step(Cancel(), 3.0)
+    result = drive.result()
+    assert result.reason == "canceled"
+    assert len(result.panels) == 1
+    panel = result.panels[0]
+    assert panel["lugs"] == 2
+    assert panel["width_m"] == pytest.approx(0.53 + 2 * 0.0675)
+    assert panel["depth_m"] == pytest.approx(0.8)
+    assert panel["front_known"] is False

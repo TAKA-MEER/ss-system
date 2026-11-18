@@ -169,6 +169,131 @@ def test_pos_std_two_lugs_adds_axis_term():
     assert top1["pos_std_m"] ** 2 - top0["pos_std_m"] ** 2 == pytest.approx(a * a, rel=1e-3)
 
 
+def _lug_toward(p, target, s_pos=0.01, s_axis=1.0, conf=1.0):
+    axis = math.degrees(math.atan2(float(target[1] - p[1]), float(target[0] - p[0]))) % 180.0
+    return {"p": np.asarray(p, float), "axis": axis, "s_pos": s_pos,
+            "s_axis": s_axis, "conf": conf}
+
+
+def _far_pair(pa, pb, far=True, **kwargs):
+    """2 個の中点から向こう側（far）／手前側へ向かう向きに輪の向きを合わせた 2 個。"""
+    pa, pb = np.asarray(pa, float), np.asarray(pb, float)
+    mid = (pa + pb) / 2.0
+    e = pb - pa
+    e = e / np.linalg.norm(e)
+    n = np.array([-e[1], e[0]])
+    if float(mid @ n) <= 0.0:
+        n = -n
+    target = mid + (0.3 if far else -0.3) * n
+    return [_lug_toward(pa, target, **kwargs), _lug_toward(pb, target, **kwargs)]
+
+
+def _two_lug(lugs, **overrides):
+    values = {"top_height_m": 2.35, "spacing_min_m": 0.5, "spacing_max_m": 0.8,
+              "depth_default_m": 0.8, "depth_std_m": 0.06}
+    values.update(overrides)
+    raw = values.pop("top_height_m")
+    top_height = raw
+    raw_panels = [{"n_lugs": 2, "lugs": list(range(len(lugs)))}]
+    return P.two_lug_panels(raw_panels, lugs, top_height, **values)
+
+
+def test_two_lug_basic():
+    lugs = _far_pair((2.0, -0.265), (2.0, 0.265))
+    tops = _two_lug(lugs)
+    assert len(tops) == 1
+    top = tops[0]
+    assert (top["x_m"], top["y_m"]) == pytest.approx((2.0 + 0.8 / 2.0 - LUG_INSET, 0.0))
+    assert top["width_m"] == pytest.approx(0.53 + 2 * LUG_INSET)
+    assert top["depth_m"] == pytest.approx(0.8)
+    assert abs(S.normalize(top["yaw_rad"] - math.pi)) <= 1e-9
+    assert top["front_known"] is False
+    assert top["front_yaw_rad"] == 0.0
+    assert top["lugs"] == 2
+    assert top["height_measured"] is False
+    assert top["top_height_m"] == pytest.approx(2.35)
+
+
+@pytest.mark.parametrize("spacing,expected", [(0.45, 0), (0.85, 0), (0.5, 1), (0.8, 1)])
+def test_two_lug_spacing_gate(spacing, expected):
+    lugs = _far_pair((2.0, -spacing / 2.0), (2.0, spacing / 2.0))
+    assert len(_two_lug(lugs)) == expected
+
+
+def test_two_lug_far_side():
+    # 輪の向きの中心が機体側（手前）にくる 2 個は盤にならない
+    lugs = _far_pair((2.0, -0.265), (2.0, 0.265), far=False)
+    assert _two_lug(lugs) == []
+
+    # 向きを 40° と 63° にずらした 2 個（実機の模擬天板の値）でも、中心が向こう側なら盤になる
+    shifted = [
+        {"p": np.array([1.751, 1.370]), "axis": 40.0, "s_pos": 0.003, "s_axis": 4.0, "conf": 0.94},
+        {"p": np.array([1.834, 0.847]), "axis": 63.0, "s_pos": 0.003, "s_axis": 3.1, "conf": 0.87},
+    ]
+    assert len(_two_lug(shifted)) == 1
+
+
+def test_two_lug_real_mock():
+    lugs = [
+        {"p": np.array([1.751, 1.370]), "axis": 139.0, "s_pos": 0.003, "s_axis": 4.0, "conf": 0.94},
+        {"p": np.array([1.834, 0.847]), "axis": 36.0, "s_pos": 0.003, "s_axis": 3.1, "conf": 0.87},
+    ]
+    tops = _two_lug(lugs)
+    assert len(tops) == 1
+    top = tops[0]
+    assert top["width_m"] == pytest.approx(0.66, abs=0.01)
+    assert (top["x_m"], top["y_m"]) == pytest.approx((2.121, 1.161), abs=0.005)
+    assert top["depth_m"] == pytest.approx(0.8)
+    assert top["lugs"] == 2
+    assert top["front_known"] is False
+
+
+def test_two_lug_keeps_3_4():
+    four = rect_lugs((0.0, 3.0), 0.0, 1.0, 0.6)
+    pair = _far_pair((2.0, -0.265), (2.0, 0.265))
+    lugs = four + pair
+    raw = [{"n_lugs": 4, "lugs": [0, 1, 2, 3]}, {"n_lugs": 2, "lugs": [4, 5]}]
+    tops = P.two_lug_panels(raw, lugs, 2.35, 0.5, 0.8, 0.8, 0.06)
+    # 4 個の盤は two_lug_panels の対象外（呼び出し側が to_panel_top でそのまま返す）
+    assert len(tops) == 1
+    assert tops[0]["width_m"] == pytest.approx(0.53 + 2 * LUG_INSET)
+    # 4 個の盤の金具を 2 個の組の候補にしない（その金具だけでは組めない）
+    pair_first = _far_pair((2.0, -0.265), (2.0, 0.265)) + [
+        {"p": np.array([5.0, 5.0]), "axis": 0.0, "s_pos": 0.01, "s_axis": 1.0, "conf": 1.0},
+        {"p": np.array([5.0, 6.0]), "axis": 0.0, "s_pos": 0.01, "s_axis": 1.0, "conf": 1.0},
+    ]
+    raw2 = [{"n_lugs": 4, "lugs": [0, 1, 2, 3]}]
+    assert P.two_lug_panels(raw2, pair_first, 2.35, 0.5, 0.8, 0.8, 0.06) == []
+
+
+def test_two_lug_between():
+    # 2 個を結ぶ線分の途中に別の金具がある
+    lugs = _far_pair((2.0, -0.265), (2.0, 0.265))
+    lugs.append(_lug_toward((2.0, 0.0), (2.3, 0.0)))
+    assert _two_lug(lugs) == []
+
+
+def test_two_lug_pick_by_conf():
+    # 3 個が一直線。間隔の条件を満たす 2 組が真ん中の金具を共有するので、
+    # 確信度の和の大きい組だけが盤になり、同じ金具を 2 つの盤に使わない
+    target = (2.3, 0.55)
+    lugs = [_lug_toward((2.0, 0.0), target, conf=0.9),
+            _lug_toward((2.0, 0.55), target, conf=0.9),
+            _lug_toward((2.0, 1.1), target, conf=0.1)]
+    tops = _two_lug(lugs)
+    assert len(tops) == 1
+    assert tops[0]["y_m"] == pytest.approx(0.275)
+
+
+def test_two_lug_pos_std():
+    lugs = _far_pair((2.0, -0.265), (2.0, 0.265), s_pos=0.01)
+    tops = _two_lug(lugs, depth_std_m=0.06)
+    assert len(tops) == 1
+    expected = math.sqrt((0.01 ** 2 + 0.01 ** 2) / 4.0 + 0.06 ** 2)
+    assert tops[0]["pos_std_m"] == pytest.approx(expected)
+    assert tops[0]["pos_std_m"] >= 0.06
+
+
 def test_pos_std_four_lugs_has_no_axis_term():
     """金具 4 個の盤には足さない（リング面の向きのばらつきで位置の標準偏差が変わらない）。"""
     tops = []
