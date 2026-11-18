@@ -236,4 +236,5 @@
 | `--out` | 写真と `observations.json` を書くフォルダ |
 | `--from` | 撮らずに、このフォルダの `observations.json` から当てはめる（`--lugs` などは json の値を使う） |
 | `--fit-height` | 高さも当てはめる（既定はしない） |
+| `--reject-m` | これより測った金具から遠い検出を外す（m。既定 0.3。`WP-CAL-03`） |
 
