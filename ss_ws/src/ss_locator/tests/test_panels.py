@@ -188,49 +188,86 @@ def _far_pair(pa, pb, far=True, **kwargs):
     return [_lug_toward(pa, target, **kwargs), _lug_toward(pb, target, **kwargs)]
 
 
-def _two_lug(lugs, **overrides):
-    values = {"top_height_m": 2.35, "spacing_min_m": 0.5, "spacing_max_m": 0.8,
-              "depth_default_m": 0.8, "depth_std_m": 0.06}
+PARAMS = dict(spacing_min_m=0.5, spacing_max_m=0.8, depth_default_m=0.86,
+              depth_std_m=0.046, depth_min_m=0.70, depth_max_m=1.02,
+              gap_min_m=0.05, gap_max_m=0.30, merge_tol_m=0.10,
+              angle_tol_deg=10.0, overlap_ratio=0.5)
+
+
+def _tops(raw, lugs, **overrides):
+    values = dict(PARAMS)
     values.update(overrides)
-    raw = values.pop("top_height_m")
-    top_height = raw
-    raw_panels = [{"n_lugs": 2, "lugs": list(range(len(lugs)))}]
-    return P.two_lug_panels(raw_panels, lugs, top_height, **values)
+    return P.make_panel_tops(raw, lugs, 2.35, **values)
 
 
-def test_two_lug_basic():
-    lugs = _far_pair((2.0, -0.265), (2.0, 0.265))
-    tops = _two_lug(lugs)
+def _pair_at(x, y_lo=-0.265, y_hi=0.265, target=None, **kwargs):
+    """x=const の列に y_lo/y_hi の 2 個。輪の向きは target へ向く。"""
+    pa, pb = np.array([x, y_lo], float), np.array([x, y_hi], float)
+    if target is None:
+        target = (x + 0.3, 0.0)
+    return [_lug_toward(pa, target, **kwargs), _lug_toward(pb, target, **kwargs)]
+
+
+def _rect_panel(lugs_all, center, phi, width, depth, s_pos=0.01):
+    """矩形の 4 個を lugs_all に足し、`assemble.fit` の盤を返す。"""
+    local = rect_lugs(center, phi, width, depth, s_pos=s_pos)
+    base = len(lugs_all)
+    lugs_all.extend(local)
+    panel = A.fit(local, [0, 1, 2, 3])
+    panel = dict(panel)
+    panel["lugs"] = [base + i for i in panel["lugs"]]
+    return panel
+
+
+# 盤の幾何（x が前後・y が左右。LUG_INSET 込みの盤の寸法は lug 間隔 + 2*LUG_INSET）
+# 面 A（手前）: 中心 x=2.0、lug の前後 0.765（盤の奥行き 0.9）。継ぎ目の列 x=2.3825
+# 面 B（奥）: 継ぎ目の列 x=2.5175、遠い列 x=3.2825、中心 x=2.9
+A_CENTER = (2.0, 0.0)
+B_CENTER = (2.9, 0.0)
+LUG_W = 0.53
+LUG_D = 0.765
+
+
+def test_two_lug_near_edge():
+    lugs = _pair_at(2.0)  # 輪は向こう側（+x）を向く
+    tops = _tops([], lugs)
     assert len(tops) == 1
     top = tops[0]
-    assert (top["x_m"], top["y_m"]) == pytest.approx((2.0 + 0.8 / 2.0 - LUG_INSET, 0.0))
+    assert (top["x_m"], top["y_m"]) == pytest.approx((2.0 + 0.86 / 2.0 - LUG_INSET, 0.0))
     assert top["width_m"] == pytest.approx(0.53 + 2 * LUG_INSET)
-    assert top["depth_m"] == pytest.approx(0.8)
-    assert abs(S.normalize(top["yaw_rad"] - math.pi)) <= 1e-9
-    assert top["front_known"] is False
-    assert top["front_yaw_rad"] == 0.0
+    assert top["depth_m"] == pytest.approx(0.86)
+    assert top["depth_measured"] is False
     assert top["lugs"] == 2
-    assert top["height_measured"] is False
-    assert top["top_height_m"] == pytest.approx(2.35)
+    assert top["front_known"] is False
+
+
+def test_two_lug_far_edge():
+    lugs = _pair_at(2.0, target=(1.7, 0.0))  # 輪は手前（-x）を向く
+    tops = _tops([], lugs)
+    assert len(tops) == 1
+    top = tops[0]
+    assert top["x_m"] == pytest.approx(2.0 - (0.86 / 2.0 - LUG_INSET))
+    assert top["x_m"] < 2.0
+    assert top["depth_m"] == pytest.approx(0.86)
+    assert top["depth_measured"] is False
+    assert top["lugs"] == 2
 
 
 @pytest.mark.parametrize("spacing,expected", [(0.45, 0), (0.85, 0), (0.5, 1), (0.8, 1)])
 def test_two_lug_spacing_gate(spacing, expected):
     lugs = _far_pair((2.0, -spacing / 2.0), (2.0, spacing / 2.0))
-    assert len(_two_lug(lugs)) == expected
+    assert len(_tops([], lugs)) == expected
 
 
-def test_two_lug_far_side():
-    # 輪の向きの中心が機体側（手前）にくる 2 個は盤にならない
-    lugs = _far_pair((2.0, -0.265), (2.0, 0.265), far=False)
-    assert _two_lug(lugs) == []
-
-    # 向きを 40° と 63° にずらした 2 個（実機の模擬天板の値）でも、中心が向こう側なら盤になる
+def test_two_lug_skewed_rings():
     shifted = [
         {"p": np.array([1.751, 1.370]), "axis": 40.0, "s_pos": 0.003, "s_axis": 4.0, "conf": 0.94},
         {"p": np.array([1.834, 0.847]), "axis": 63.0, "s_pos": 0.003, "s_axis": 3.1, "conf": 0.87},
     ]
-    assert len(_two_lug(shifted)) == 1
+    tops = _tops([], shifted)
+    assert len(tops) == 1
+    assert (tops[0]["x_m"], tops[0]["y_m"]) == pytest.approx((2.151, 1.165), abs=0.01)
+    assert tops[0]["depth_m"] == pytest.approx(0.86)
 
 
 def test_two_lug_real_mock():
@@ -238,60 +275,149 @@ def test_two_lug_real_mock():
         {"p": np.array([1.751, 1.370]), "axis": 139.0, "s_pos": 0.003, "s_axis": 4.0, "conf": 0.94},
         {"p": np.array([1.834, 0.847]), "axis": 36.0, "s_pos": 0.003, "s_axis": 3.1, "conf": 0.87},
     ]
-    tops = _two_lug(lugs)
+    tops = _tops([], lugs)
     assert len(tops) == 1
     top = tops[0]
-    assert top["width_m"] == pytest.approx(0.66, abs=0.01)
-    assert (top["x_m"], top["y_m"]) == pytest.approx((2.121, 1.161), abs=0.005)
-    assert top["depth_m"] == pytest.approx(0.8)
+    assert top["width_m"] == pytest.approx(0.665, abs=0.005)
+    assert top["depth_m"] == pytest.approx(0.86)
+    assert (top["x_m"], top["y_m"]) == pytest.approx((2.151, 1.165), abs=0.01)
     assert top["lugs"] == 2
     assert top["front_known"] is False
+    assert top["depth_measured"] is False
 
 
-def test_two_lug_keeps_3_4():
-    four = rect_lugs((0.0, 3.0), 0.0, 1.0, 0.6)
-    pair = _far_pair((2.0, -0.265), (2.0, 0.265))
-    lugs = four + pair
-    raw = [{"n_lugs": 4, "lugs": [0, 1, 2, 3]}, {"n_lugs": 2, "lugs": [4, 5]}]
-    tops = P.two_lug_panels(raw, lugs, 2.35, 0.5, 0.8, 0.8, 0.06)
-    # 4 個の盤は two_lug_panels の対象外（呼び出し側が to_panel_top でそのまま返す）
+def test_back_to_back_rect_rect():
+    lugs = []
+    raw = [_rect_panel(lugs, A_CENTER, 0.0, LUG_D, LUG_W),
+           _rect_panel(lugs, B_CENTER, 0.0, LUG_D, LUG_W)]
+    tops = _tops(raw, lugs)
     assert len(tops) == 1
-    assert tops[0]["width_m"] == pytest.approx(0.53 + 2 * LUG_INSET)
-    # 4 個の盤の金具を 2 個の組の候補にしない（その金具だけでは組めない）
-    pair_first = _far_pair((2.0, -0.265), (2.0, 0.265)) + [
-        {"p": np.array([5.0, 5.0]), "axis": 0.0, "s_pos": 0.01, "s_axis": 1.0, "conf": 1.0},
-        {"p": np.array([5.0, 6.0]), "axis": 0.0, "s_pos": 0.01, "s_axis": 1.0, "conf": 1.0},
-    ]
-    raw2 = [{"n_lugs": 4, "lugs": [0, 1, 2, 3]}]
-    assert P.two_lug_panels(raw2, pair_first, 2.35, 0.5, 0.8, 0.8, 0.06) == []
+    top = tops[0]
+    assert top["depth_m"] == pytest.approx(1.8, abs=0.02)
+    assert top["lugs"] == 8
+    assert top["depth_measured"] is True
+    assert top["x_m"] == pytest.approx(2.45, abs=0.02)
+
+
+def test_back_to_back_pair_pair_outer():
+    lugs = _pair_at(1.6175, target=(2.0, 0.0)) + _pair_at(3.2825, target=(2.9, 0.0))
+    tops = _tops([], lugs)
+    assert len(tops) == 1
+    top = tops[0]
+    assert top["depth_m"] == pytest.approx(1.8, abs=0.02)
+    assert top["depth_measured"] is True
+    assert top["lugs"] == 4
+
+
+def test_single_face_from_two_pairs():
+    lugs = _pair_at(1.6175, target=(2.0, 0.0)) + _pair_at(2.3825, target=(2.0, 0.0))
+    tops = _tops([], lugs)
+    assert len(tops) == 1
+    top = tops[0]
+    assert top["depth_m"] == pytest.approx(0.9, abs=0.02)
+    assert top["depth_measured"] is True
+    assert top["lugs"] == 4
+
+
+def test_back_to_back_one_full():
+    lugs = []
+    raw = [_rect_panel(lugs, A_CENTER, 0.0, LUG_D, LUG_W)]
+    lugs += _pair_at(3.2825, target=(2.9, 0.0))
+    tops = _tops(raw, lugs)
+    assert len(tops) == 1
+    assert tops[0]["depth_measured"] is True
+    assert tops[0]["lugs"] == 6
+
+
+def test_back_to_back_seam_only():
+    lugs = _pair_at(2.3825, target=(2.0, 0.0)) + _pair_at(2.5175, target=(2.9, 0.0))
+    tops = _tops([], lugs)
+    assert len(tops) == 1
+    top = tops[0]
+    assert top["depth_m"] == pytest.approx(2 * 0.86, abs=0.02)
+    assert top["depth_measured"] is False
+    # 測っていない一番外側の列 2 本ぶんのばらつき
+    assert top["pos_std_m"] >= math.sqrt(2) * 0.046 - 1e-9
+
+
+def test_back_to_back_rect_pair():
+    lugs = []
+    raw = [_rect_panel(lugs, A_CENTER, 0.0, LUG_D, LUG_W)]
+    lugs += _pair_at(2.5175, target=(2.9, 0.0))
+    tops = _tops(raw, lugs)
+    assert len(tops) == 1
+    assert tops[0]["depth_measured"] is False
+    assert tops[0]["lugs"] == 6
+
+
+def test_seam_diagonal_four():
+    # 継ぎ目の 4 個。斜めの組の確信度を高くしても、列ごとの組が選ばれる
+    lugs = _pair_at(2.3825, target=(2.0, 0.0), conf=0.1) + _pair_at(2.5175, target=(2.9, 0.0), conf=0.1)
+    lugs[0]["conf"] = 0.9
+    lugs[3]["conf"] = 0.9
+    tops = _tops([], lugs)
+    assert len(tops) == 1
+    assert tops[0]["depth_m"] == pytest.approx(2 * 0.86, abs=0.02)
+    assert tops[0]["lugs"] == 4
+
+
+def test_seam_diagonal_three():
+    # 継ぎ目の 3 個。斜めの組は捨てられ、直角の組（片方の列の 2 個）が選ばれる
+    lugs = _pair_at(2.3825, target=(2.0, 0.0))
+    lugs.append(_lug_toward((2.5175, 0.265), (2.9, 0.265)))
+    tops = _tops([], lugs)
+    assert len(tops) == 1
+    assert tops[0]["lugs"] == 2
+    assert tops[0]["depth_m"] == pytest.approx(0.86)
+
+
+def test_back_to_back_gates():
+    # 向きの差 15°
+    lugs = []
+    raw = [_rect_panel(lugs, A_CENTER, 0.0, LUG_D, LUG_W),
+           _rect_panel(lugs, B_CENTER, math.radians(15.0), LUG_D, LUG_W)]
+    assert len(_tops(raw, lugs)) == 2
+    # 継ぎ目 0.4 m
+    lugs = []
+    raw = [_rect_panel(lugs, A_CENTER, 0.0, LUG_D, LUG_W),
+           _rect_panel(lugs, (3.165, 0.0), 0.0, LUG_D, LUG_W)]
+    assert len(_tops(raw, lugs)) == 2
+    # 重なり 30%
+    lugs = []
+    raw = [_rect_panel(lugs, A_CENTER, 0.0, LUG_D, LUG_W),
+           _rect_panel(lugs, (2.9, 0.371), 0.0, LUG_D, LUG_W)]
+    assert len(_tops(raw, lugs)) == 2
+    # k=2 で測った列の間 1.1 m（1 面にも 2 面にも合わない）
+    lugs = _pair_at(1.6175, target=(2.0, 0.0)) + _pair_at(2.7175, target=(2.5, 0.0))
+    assert len(_tops([], lugs)) == 2
+
+
+def test_single_rect_unchanged():
+    lugs = rect_lugs((0.0, 3.0), 0.0, 1.0, 0.6)
+    panel = A.fit(lugs, [0, 1, 2, 3])
+    want = P.to_panel_top(panel, lugs, 2.35)
+    tops = _tops([panel], lugs)
+    assert len(tops) == 1
+    got = tops[0]
+    for key in ("x_m", "y_m", "yaw_rad", "width_m", "depth_m", "pos_std_m", "yaw_std_deg"):
+        assert got[key] == pytest.approx(want[key], abs=1e-9), key
+    assert got["depth_measured"] is True
 
 
 def test_two_lug_between():
-    # 2 個を結ぶ線分の途中に別の金具がある
     lugs = _far_pair((2.0, -0.265), (2.0, 0.265))
     lugs.append(_lug_toward((2.0, 0.0), (2.3, 0.0)))
-    assert _two_lug(lugs) == []
+    assert _tops([], lugs) == []
 
 
 def test_two_lug_pick_by_conf():
-    # 3 個が一直線。間隔の条件を満たす 2 組が真ん中の金具を共有するので、
-    # 確信度の和の大きい組だけが盤になり、同じ金具を 2 つの盤に使わない
     target = (2.3, 0.55)
     lugs = [_lug_toward((2.0, 0.0), target, conf=0.9),
             _lug_toward((2.0, 0.55), target, conf=0.9),
             _lug_toward((2.0, 1.1), target, conf=0.1)]
-    tops = _two_lug(lugs)
+    tops = _tops([], lugs)
     assert len(tops) == 1
     assert tops[0]["y_m"] == pytest.approx(0.275)
-
-
-def test_two_lug_pos_std():
-    lugs = _far_pair((2.0, -0.265), (2.0, 0.265), s_pos=0.01)
-    tops = _two_lug(lugs, depth_std_m=0.06)
-    assert len(tops) == 1
-    expected = math.sqrt((0.01 ** 2 + 0.01 ** 2) / 4.0 + 0.06 ** 2)
-    assert tops[0]["pos_std_m"] == pytest.approx(expected)
-    assert tops[0]["pos_std_m"] >= 0.06
 
 
 def test_pos_std_four_lugs_has_no_axis_term():

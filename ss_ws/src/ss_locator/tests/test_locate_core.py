@@ -44,8 +44,15 @@ def make_params(**overrides):
         "top_height_default_m": 2.35,
         "two_lug_spacing_min_m": 0.5,
         "two_lug_spacing_max_m": 0.8,
-        "two_lug_depth_default_m": 0.8,
-        "two_lug_depth_std_m": 0.06,
+        "two_lug_depth_default_m": 0.86,
+        "two_lug_depth_std_m": 0.046,
+        "panel_depth_min_m": 0.70,
+        "panel_depth_max_m": 1.02,
+        "back_to_back_gap_min_m": 0.05,
+        "back_to_back_gap_max_m": 0.30,
+        "merge_tol_m": 0.10,
+        "back_to_back_angle_tol_deg": 10.0,
+        "back_to_back_overlap_ratio": 0.5,
         "scan_camera_height_m": 3.10,
         "min_camera_height_m": 2.95,
         "scan_pitch_down_deg": 20.0,
@@ -951,7 +958,7 @@ def test_core_cleanup_limit_includes_yaw():
 
 
 def test_two_lug_in_core():
-    # `two_lug_panels` の結果を返す盤に足す（本番の経路の試験）
+    # `make_panel_tops` の結果を返す盤にする（本番の経路の試験）
     drive = Drive(settle_s=0.0)
     drive.camera(2.0, arrived=True)
     assert has(drive.commands, RequestFrame)
@@ -969,5 +976,6 @@ def test_two_lug_in_core():
     panel = result.panels[0]
     assert panel["lugs"] == 2
     assert panel["width_m"] == pytest.approx(0.53 + 2 * 0.0675)
-    assert panel["depth_m"] == pytest.approx(0.8)
+    assert panel["depth_m"] == pytest.approx(0.86)
+    assert panel["depth_measured"] is False
     assert panel["front_known"] is False

@@ -239,8 +239,15 @@ def test_node_two_lug_parameters():
         params = rig.node._core_parameters()
         assert params["two_lug_spacing_min_m"] == pytest.approx(0.5)
         assert params["two_lug_spacing_max_m"] == pytest.approx(0.8)
-        assert params["two_lug_depth_default_m"] == pytest.approx(0.8)
-        assert params["two_lug_depth_std_m"] == pytest.approx(0.06)
+        assert params["two_lug_depth_default_m"] == pytest.approx(0.86)
+        assert params["two_lug_depth_std_m"] == pytest.approx(0.046)
+        assert params["panel_depth_min_m"] == pytest.approx(0.70)
+        assert params["panel_depth_max_m"] == pytest.approx(1.02)
+        assert params["back_to_back_gap_min_m"] == pytest.approx(0.05)
+        assert params["back_to_back_gap_max_m"] == pytest.approx(0.30)
+        assert params["merge_tol_m"] == pytest.approx(0.10)
+        assert params["back_to_back_angle_tol_deg"] == pytest.approx(10.0)
+        assert params["back_to_back_overlap_ratio"] == pytest.approx(0.5)
     finally:
         rig.close()
 
