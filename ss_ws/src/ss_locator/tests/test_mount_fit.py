@@ -96,3 +96,28 @@ def test_fit_too_few():
         _fit([{"yaw_rad": 0.0, "pitch_down_rad": 0.4, "pixels": obs[0]["pixels"][:1]}])
     with pytest.raises(FitError, match="at least 2 pixels"):
         _fit([])
+
+
+def test_fit_reassign_after_roll():
+    # 格子は φ を見ない（0 で割り当てる）ので、φ が大きいと初めの割り当てが外れる。
+    # 当てはめたあとの割り当て直しで正しい金具に戻ること。
+    lugs = np.array([[3.0, -0.3], [3.0, 0.3], [5.0, 0.0]])
+    true = dict(pitch_offset_rad=math.radians(-2.6),
+                yaw_offset_rad=math.radians(-5.4),
+                roll_rad=math.radians(15.0))
+    obs = []
+    for yaw_deg, pitch_deg in [(-15.0, 25.0), (-8.0, 28.0), (0.0, 24.0),
+                               (8.0, 28.0), (15.0, 25.0)]:
+        T = G.camera_T(HEIGHT_M, math.radians(yaw_deg), math.radians(pitch_deg),
+                       **MOUNT, **true)
+        pts = np.c_[lugs, np.full(len(lugs), TOP_HEIGHT_M)]
+        uv, ok = G.project(pts, K, DIST, T, 1280, 720)
+        assert ok.all()
+        obs.append({"yaw_rad": math.radians(yaw_deg),
+                    "pitch_down_rad": math.radians(pitch_deg),
+                    "pixels": uv})
+    result = fit_mount_offsets(obs, lugs, K, DIST, height_m=HEIGHT_M,
+                               top_height_m=TOP_HEIGHT_M, **MOUNT)
+    assert math.degrees(abs(result.pitch_offset_rad - true["pitch_offset_rad"])) < 0.05
+    assert math.degrees(abs(result.yaw_offset_rad - true["yaw_offset_rad"])) < 0.05
+    assert math.degrees(abs(result.roll_rad - true["roll_rad"])) < 0.05
