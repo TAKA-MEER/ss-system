@@ -100,6 +100,7 @@ def _panel_to_dict(panel):
         "y_m": panel.y_m,
         "top_height_m": panel.top_height_m,
         "height_measured": bool(panel.height_measured),
+        "depth_measured": bool(panel.depth_measured),
         "yaw_rad": panel.yaw_rad,
         "width_m": panel.width_m,
         "depth_m": panel.depth_m,
