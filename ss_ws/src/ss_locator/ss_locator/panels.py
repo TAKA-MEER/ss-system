@@ -193,6 +193,9 @@ def _seam_trap(lugs, i, j, neighbours, gap_min_m, gap_max_m):
             if k == l:
                 continue
             pl = np.asarray(lugs[l]["p"], float)
+            # ① 対角線の長さがそろうときだけ当てる（継ぎ目の 2 本の対角線はほぼ同じ長さ）
+            if abs(float(np.linalg.norm(pl - pk)) - dij) >= float(gap_min_m):
+                continue
             # ① k と l が線 i–j から離れて反対側にあるときだけ当てる
             # （ほぼ一直線の同じ列の金具が誤差で「交わる」にならないように）
             edge = pb - pa
