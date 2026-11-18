@@ -63,9 +63,14 @@
 | --- | --- | --- | --- |
 | `max_distance_default_m` | m | 5.0 | [Spec.md](../spec/Spec.md) §1.2「撮り方」（盤まで 5 m 以内） |
 | `top_height_default_m` | m | 2.35 | [Spec.md](../spec/Spec.md) §1.1「高さ」 |
-| `two_lug_spacing_min_m`・`two_lug_spacing_max_m` | m | 0.5・0.8 | [Spec.md](../spec/Spec.md) §1.2「金具の取り付け角」（2026-11-18 ユーザー決定。金具の中心どうしの間隔） |
-| `two_lug_depth_default_m` | m | 0.8 | **暫定**（金具 2 個の盤の奥行き。[Spec.md](../spec/Spec.md) §1.1。試作が想定する奥行き 0.6〜1.0 m の中央。**実際の盤の代表値をユーザーに確かめる**。`WP-EST-04`） |
-| `two_lug_depth_std_m` | m | 0.06 | **暫定**（奥行きを既定値にする分の中心の前後のばらつき。奥行きが 0.6〜1.0 m に一様なら中心のずれは ±0.1 m で、標準偏差 0.058 m。`WP-EST-04`） |
+| `two_lug_spacing_min_m`・`two_lug_spacing_max_m` | m | 0.5・0.8 | [Spec.md](../spec/Spec.md) §1.2「金具の取り付け角」（2026-11-18 ユーザー決定。金具 2 個から組とみなす間隔。金具の中心どうし） |
+| `two_lug_depth_default_m` | m | 0.86 | 奥行きを測れない盤の奥行き（[Spec.md](../spec/Spec.md) §1.1「奥行き」。1 面の 700〜1020 mm の中央） |
+| `two_lug_depth_std_m` | m | 0.046 | 測っていない外側の列 1 本ぶんの中心のばらつき（奥行きが 700〜1020 mm に一様なら、中心のずれの標準偏差は `0.32 / (2√12)`） |
+| `panel_depth_min_m`・`panel_depth_max_m` | m | 0.70・1.02 | [Spec.md](../spec/Spec.md) §1.1「奥行き」（盤 1 面の奥行き。2026-11-18 ユーザー決定） |
+| `back_to_back_gap_min_m`・`back_to_back_gap_max_m` | m | 0.05・0.30 | **暫定**（背中合わせの継ぎ目の幅＝向かい合う金具の列の間。`2 × LUG_INSET` は 0.10〜0.17 m。盤の間のすき間と位置の誤差を見込んだ。[-core.md](DetailedDesign-core.md) §4.1） |
+| `merge_tol_m` | m | 0.10 | **暫定**（1 面の手前と奥の列をまとめるときの、奥行きの範囲に足す位置の誤差の見込み） |
+| `back_to_back_angle_tol_deg` | ° | 10 | **暫定**（かけらをまとめるときの向きの差） |
+| `back_to_back_overlap_ratio` | — | 0.5 | **暫定**（かけらをまとめるときの、列に沿った金具の範囲の重なり。短い方に対する割合） |
 | `status_period_ms` | ms | 200 | 暫定 |
 | `cleanup_timeout_s` | s | 30 | 暫定（**昇降の速さが分からないとき**の後片付けの上限。分かるときは [-locate.md](DetailedDesign-locate.md) §3 の式。過ぎたら手を離して `lift_restored: false`） |
 | `cleanup_margin_s` | s | 10 | **暫定**（版 2。後片付けの上限に足す余裕。`WP-LOC-03`） |

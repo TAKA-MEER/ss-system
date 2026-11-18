@@ -74,7 +74,7 @@
 | `lugs` | int32 | 使った吊り金具の数 |
 | `front_known` | bool | 正面が分かっている（背中合わせの盤など。追加の情報。使わなくてよい） |
 | `front_yaw_rad` | float64 | `front_known` のとき、正面の向き（中心から正面の辺へ向かう向き）。そうでなければ 0 |
-| `depth_measured` | bool | **版 3 の案（2026-11-18。fk-system の確認待ち。まだ型に入れない）。**奥行きを測ったか。金具 2 個の盤は false（奥行きと中心の前後の位置は `two_lug_depth_default_m` から決めた値。[Spec.md](../spec/Spec.md) §1.1）。3〜4 個の盤は true |
+| `depth_measured` | bool | **版 3 の案（2026-11-18。fk-system の確認待ち。まだ型に入れない）。**奥行きを測ったか。一番手前と一番奥の金具の列を、どちらも写したとき true。そうでなければ false で、奥行きと中心の前後の位置は `two_lug_depth_default_m` から決めた値（[-core.md](DetailedDesign-core.md) §4.1。[Spec.md](../spec/Spec.md) §1.1） |
 
 ### 2.4 終わり方（`reason`）
 

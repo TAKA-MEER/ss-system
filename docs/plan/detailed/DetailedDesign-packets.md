@@ -23,7 +23,7 @@
 | `WP-DEMO-03` | 金具認識のリアルタイム表示に速さと入力の解像度を出す | `WP-DEMO-01` | できる |
 | `WP-LOC-03` | 口の版 2（理由 2 つ・後片付けの上限・`cleanup_limit_s`） | `WP-HVE-01` | 済み（2026-11-17 マージ） |
 | `WP-TEST-01` | 依頼を手で試す道具（テスト用の端末のコマンド） | `WP-LOC-03` | 済み（2026-11-17 マージ） |
-| `WP-EST-04` | 金具 2 個の盤を間隔と向こう側の判定で組む（口は変えない） | `WP-EST-02` | できる（2026-11-18） |
+| `WP-EST-04` | 四隅が写らない盤と背中合わせの盤を組む（口は変えない） | `WP-EST-02` | できる（2026-11-18。同日に前提を見直して書き直した） |
 | `WP-LOC-04` | 口の版 3（`depth_measured`） | `WP-EST-04` | **待ち**（fk-system の確認。[Spec-open.md](../spec/Spec-open.md) §1.2） |
 
 先行試作は `../../lifting-lug-pose` の `9265d2d`。**試作のリポジトリは読むだけで、書き換えない。**
@@ -471,33 +471,43 @@ ros2 run ss_locator locate_cli --plot .briefs/tmp/top.png --json .briefs/tmp/res
 
 **変異チェック（実装管理担当が自分で回す）**: (1) `locate_cli.py` で確認に `n` でも依頼を送る、(2) 取り消したあと後片付けの完了を待たずに終わる、(3) `cleanup_done` の依頼の ID を照らさない、(4) `locate_view.py` で度を rad に直さない、(5) 図の左右を逆にする、(6) `cleanup_limit_s` を無視して固定の時間で待つ、(7) 版の照合を `"1"` に戻す、のそれぞれで試験が落ちること。
 
-## `WP-EST-04` 金具 2 個の盤を間隔と向こう側の判定で組む
+## `WP-EST-04` 四隅が写らない盤と背中合わせの盤を組む
 
-**状態: 2026-11-18 案。**[Spec.md](../spec/Spec.md) §1.2「金具の取り付け角」。**口（`ss_msgs`）は変えない**（`depth_measured` は `WP-LOC-04`）。
+**状態: 2026-11-18 案（同日に前提を見直して書き直した。最初の「中心が向こう側のものだけ」は取りやめ）。**[Spec.md](../spec/Spec.md) §1.1「背中合わせの盤」「奥行き」・§1.2「吊り金具の数」「金具の取り付け角」。**口（`ss_msgs`）は変えない**（`depth_measured` は `WP-LOC-04`。値は中で求めておき、口には出さない）。
 
-**読む節**: [-core.md](DetailedDesign-core.md) §4・§4.1、[-names.md](DetailedDesign-names.md) §3（パラメータ 4 つ）。
+**読む節**: [-core.md](DetailedDesign-core.md) §4・§4.1、[-names.md](DetailedDesign-names.md) §3（`two_lug_*`・`back_to_back_*`・`panel_depth_*`・`merge_tol_m` のパラメータ 11 個）。
 
 | やること | 中身 |
 | --- | --- |
-| 純関数 | `panels.py` に `two_lug_panels`（[-core.md](DetailedDesign-core.md) §4.1 の 1〜4）と、2 個の組 → `PanelTop` と同じキーの dict。**`assemble.py` は変えない**（試作との一致の試験を残す） |
-| 呼び出し | `locate_core.py` の `assemble.assemble` の結果を `PanelTop` にしている所（`panels.to_panel_top`・`filter_panels` の直前）で、3〜4 個の盤と `two_lug_panels` の盤を合わせて返す。どちらも `filter_panels` を通す |
-| パラメータ | `two_lug_spacing_min_m`・`two_lug_spacing_max_m`・`two_lug_depth_default_m`・`two_lug_depth_std_m` を `locator_node`・`config/locator.yaml` に足し、`locate_core` まで渡す |
+| 純関数 | `panels.py` に、[-core.md](DetailedDesign-core.md) §4.1 の 1〜4（かけらを作る・金具 2 個の組・継ぎ目のわな・背中合わせのまとめ）と、盤 → `PanelTop` と同じキーの dict（`depth_measured` も入れてよい。口に出すときに捨てる）。**`assemble.py` は変えない** |
+| 呼び出し | `locate_core.py` の `assemble.assemble` の結果を `PanelTop` にしている所で、§4.1 の結果を返す盤にする。そのあと `filter_panels` |
+| パラメータ | 11 個を `locator_node`・`config/locator.yaml` に足し、`locate_core` まで渡す |
 | 試験 | 下の表 |
-| 合成データでの見積もり | 試作の材料（`proto_9265d2d.json` の 10 シーン）で、直す前と後の「金具 2 個の盤」の数・位置の誤差・向きの誤差を表にし、パケットの報告に書く（奥行きが既定値と違う盤では中心の前後がずれるのは分かっていてよい） |
+
+**合成データ（`proto_9265d2d.json`）での比べは要らない。**試作の合成データは「金具は前側 2 個だけのことが多い・背中合わせは 2 面に分けて返す」という前の前提で作られており、新しい規則の正しさを測れない（真値の入った試作のリポジトリはこの PC に無い）。正しさは下の作った場面の試験と、実機の模擬天板で確かめる。
 
 | 試験 | 確かめること |
 | --- | --- |
-| `test_two_lug_basic` | 機体の前 2 m に、間隔 0.53 m・輪の向きが中心を向く 2 個 → 盤 1 面。中心の左右が 2 個の中点、前後が `mid + n × (奥行き/2 − LUG_INSET)`、幅 0.53 + 2×`LUG_INSET`、奥行きが既定値、`front_known` false、`lugs` 2 |
+| `test_two_lug_near_edge` | 機体の前 2 m に、間隔 0.53 m・輪の向きが向こう側の中心を向く 2 個 → 盤 1 面。中心の左右が 2 個の中点、前後が `mid + n × (奥行き/2 − LUG_INSET)`、幅 0.53 + 2×`LUG_INSET`、奥行き 0.86、奥行きを測ったか false、`lugs` 2、`front_known` false |
+| `test_two_lug_far_edge` | 同じ 2 個で、輪の向きが手前の中心を向く → 盤 1 面で、中心は金具の線より手前（機体側） |
 | `test_two_lug_spacing_gate` | 間隔 0.45 m・0.85 m では盤にならない。0.5 m・0.8 m ちょうどはなる |
-| `test_two_lug_far_side` | 輪の向きの中心が機体側（手前）にくる 2 個は盤にならない。**向きを 40° と 63° にずらした 2 個（実機の模擬天板の値）でも、中心が向こう側なら盤になる** |
-| `test_two_lug_real_mock` | 実機の模擬天板の 2 個（`p`・`axis`・`s_axis`・`s_pos` を [ImplementationPlan.md](../ImplementationPlan.md) §6 の 4a の値で固定）で盤 1 面。幅 ≈ 0.66 m |
-| `test_two_lug_keeps_3_4` | 金具 4 個の盤とその隣の 2 個 → 4 個の盤は今までと同じ値、2 個は新しい規則の盤。4 個の盤の金具は 2 個の組に使わない |
+| `test_two_lug_skewed_rings` | 輪の向きを 40° と 63° にずらした 2 個（実機の模擬天板の値）でも、広がる側が変わらない |
+| `test_two_lug_real_mock` | 実機の模擬天板の 2 個（金具 A: p=(1.751, 1.370)・axis 139.0°・s_axis 4.0・conf 0.94、金具 B: p=(1.834, 0.847)・axis 36.0°・s_axis 3.1・conf 0.87、s_pos 0.003）で盤 1 面。幅 ≈ 0.665 m、奥行き 0.86 |
+| `test_back_to_back_rect_rect` | 背中合わせの 2 面（各 4 個・奥行き 0.9 m・継ぎ目 0.135 m）→ 盤 1 面。奥行き ≈ 1.8 m、`lugs` 8、奥行きを測ったか true |
+| `test_back_to_back_pair_pair_outer` | 2 面の外側の列だけ（手前の 2 個と奥の 2 個。輪はそれぞれ内側を向く。列の間 1.665 m）→ 盤 1 面（`k` = 2 の 2 面）。奥行き ≈ 1.8 m、奥行きを測ったか true |
+| `test_single_face_from_two_pairs` | 1 面の 4 個で、試作の組み立てが組めない（輪の向きをずらす）→ 金具 2 個の組 2 つがまとまって盤 1 面（`k` = 2 の 1 面）。奥行きを測ったか true、`lugs` 4 |
+| `test_back_to_back_one_full` | 手前の面は 4 個、奥の面は奥の列の 2 個だけ（輪は手前を向く）→ 盤 1 面（`k` = 1）。奥行きを測ったか true |
+| `test_back_to_back_seam_only` | 継ぎ目の 2 列（4 個）だけ → 盤 1 面。奥行き ≈ 2 × 0.86、測っていない列 2 本、`pos_std_m` に `two_lug_depth_std_m` が 2 本分入る |
+| `test_back_to_back_rect_pair` | 手前の面は 4 個、奥の面は継ぎ目側の 2 個だけ → 盤 1 面。手前の端は測った、奥の端は測っていない |
+| `test_seam_diagonal_four` | 継ぎ目の 4 個で、列をまたぐ斜めの組（約 0.55 m）が選ばれない（交わる斜めを捨てる。確信度を斜めの方が高くしても） |
+| `test_seam_diagonal_three` | 継ぎ目の 3 個（片方の列は 2 個、もう片方は 1 個）で、直角の組が選ばれる |
+| `test_back_to_back_gates` | 向きの差 15°・継ぎ目 0.4 m・重なり 30%・`k` = 2 で列の間 1.1 m（1 面にも 2 面にも合わない）のそれぞれで、まとめない |
+| `test_single_rect_unchanged` | 1 面だけの 4 個の盤は、今までと同じ値（中心・向き・幅・奥行き・`pos_std_m`・`yaw_std_deg`） |
 | `test_two_lug_between` | 2 個の線分の途中に別の金具があれば組にしない |
-| `test_two_lug_pick_by_conf` | 金具 3 個が一直線（どの 2 個も条件を満たす）でも、同じ金具を 2 つの盤に使わない |
-| `test_two_lug_pos_std` | `pos_std_m` が `two_lug_depth_std_m` 以上 |
-| 既存 | 試作との一致の試験（`assemble`）は直さずに通る。`locate_core`・ノードの試験で、金具 2 個の盤の値が変わったものは、新しい規則の値に直す（**何を直したかを報告に列挙する**） |
+| `test_two_lug_pick_by_conf` | 同じ金具を 2 つの組に使わない |
+| 既存 | 試作との一致の試験（`assemble`）は直さずに通る。`locate_core`・ノードの試験で、金具 2 個の盤の値が変わったものは新しい値に直す（**何を直したかを報告に列挙する**） |
 
-**変異チェック（実装管理担当が自分で回す）**: (1) 間隔の判定を外す、(2) 向こう側の判定の不等号を逆にする、(3) 奥行きの既定値を使わず 0 にする（中心が金具の線の上になる）、(4) 呼び出し側で `two_lug_panels` の結果を返す盤に足さない（**本番の経路を縛る**）、(5) 3〜4 個の盤の金具を 2 個の組の候補に入れる、のそれぞれで試験が落ちること。
+**変異チェック（実装管理担当が自分で回す）**: (1) 間隔の判定を外す、(2) 広がる側の符号を逆にする、(3) `locate_core` でまとめる手順を呼ばない（**本番の経路を縛る**）、(4) 継ぎ目のわなの ① を外す、(5) まとめる条件 (iii)（向かい合うのは測った列どうし）を外す、(6) `k` の数え方で金具 2 個の組の広がる側を見ない（常に 0 とする）、のそれぞれで試験が落ちること。
 
 ## `WP-LOC-04` 口の版 3（待ち）
 
