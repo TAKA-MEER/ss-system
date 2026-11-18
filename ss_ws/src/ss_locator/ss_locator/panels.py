@@ -193,6 +193,16 @@ def _seam_trap(lugs, i, j, neighbours, gap_min_m, gap_max_m):
             if k == l:
                 continue
             pl = np.asarray(lugs[l]["p"], float)
+            # ① k と l が線 i–j から離れて反対側にあるときだけ当てる
+            # （ほぼ一直線の同じ列の金具が誤差で「交わる」にならないように）
+            edge = pb - pa
+            length = float(np.linalg.norm(edge))
+            cross_k = float(edge[0] * (pk[1] - pa[1]) - edge[1] * (pk[0] - pa[0])) / length
+            cross_l = float(edge[0] * (pl[1] - pa[1]) - edge[1] * (pl[0] - pa[0])) / length
+            if abs(cross_k) < float(gap_min_m) / 2.0 or abs(cross_l) < float(gap_min_m) / 2.0:
+                continue
+            if (cross_k > 0) == (cross_l > 0):
+                continue
             if _segments_cross(pa, pb, pk, pl):
                 return True  # ①
     return False
