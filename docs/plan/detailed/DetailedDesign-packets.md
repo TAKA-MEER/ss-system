@@ -24,7 +24,7 @@
 | `WP-LOC-03` | 口の版 2（理由 2 つ・後片付けの上限・`cleanup_limit_s`） | `WP-HVE-01` | 済み（2026-11-17 マージ） |
 | `WP-TEST-01` | 依頼を手で試す道具（テスト用の端末のコマンド） | `WP-LOC-03` | 済み（2026-11-17 マージ） |
 | `WP-EST-04` | 四隅が写らない盤と背中合わせの盤を組む（口は変えない） | `WP-EST-02` | 済み（2026-11-18 マージ） |
-| `WP-LOC-04` | 口の版 3（`depth_measured`） | `WP-EST-04` | できる（2026-11-18 fk-system が承認。パケットはこれから書く） |
+| `WP-LOC-04` | 口の版 3（`depth_measured`） | `WP-EST-04` | できる（2026-11-18 fk-system が承認） |
 
 先行試作は `../../lifting-lug-pose` の `9265d2d`。**試作のリポジトリは読むだけで、書き換えない。**
 
@@ -510,9 +510,30 @@ ros2 run ss_locator locate_cli --plot .briefs/tmp/top.png --json .briefs/tmp/res
 
 **変異チェック（実装管理担当が自分で回す）**: (1) 間隔の判定を外す、(2) 広がる側の符号を逆にする、(3) `locate_core` でまとめる手順を呼ばない（**本番の経路を縛る**）、(4) 継ぎ目のわなの ① で「`k`・`l` が線から離れている」の確かめを外す（`test_side_by_side_row` が落ちる。① 全体を外しても、4 個の斜めは ② でも捨てられるので試験は落ちない。2026-11-18 MuseEmber の指摘）、(5) まとめる条件 (iii)（向かい合うのは測った列どうし）を外す、(6) `k` の数え方で金具 2 個の組の広がる側を見ない（常に 0 とする）、のそれぞれで試験が落ちること。
 
-## `WP-LOC-04` 口の版 3（待ち）
+## `WP-LOC-04` 口の版 3
 
-fk-system が `depth_measured`（[-locate.md](DetailedDesign-locate.md) §2.3）と版 3 への切り替えを確かめたら書く。
+**状態: 2026-11-18 案。同日 fk-system が承認**（fk `8d4a1b7`）。**マージしたらコミットを fk-system に知らせる**（fk はそのコミット以降の `ss_msgs` で口を作る）。
+
+**読む節**: [-locate.md](DetailedDesign-locate.md) §2.3（`depth_measured`）・`interface_version` の行、[-core.md](DetailedDesign-core.md) §4.1（「奥行きを測ったか」）、[-names.md](DetailedDesign-names.md) §9a、[-tester.md](DetailedDesign-tester.md) の表の「奥行」の行。
+
+| やること | 中身 |
+| --- | --- |
+| 型 | `ss_msgs/msg/PanelTop.msg` の**最後**に `bool depth_measured` を足す |
+| `locator_node.py` | `INTERFACE_VERSION` を `"3"`。`_make_result` で、盤の dict の `depth_measured` を `PanelTop.depth_measured` に入れる。**dict に無ければ例外にする**（黙って true にしない。`panels.make_panel_tops` は必ず入れる） |
+| `panels.py` | `to_panel_top`（試験だけが使う）の dict にも `depth_measured: True` を足す（3〜4 個の盤は両方の列を測った） |
+| `locate_view.py`・`locate_cli.py` | `INTERFACE_VERSION` を `"3"`。表の「奥行」に `*` と、表の下の 1 行（[-tester.md](DetailedDesign-tester.md)）。`_panel_to_dict` と記録の JSON に `depth_measured` |
+
+| 試験 | 確かめること |
+| --- | --- |
+| `test_node_interface_version` | `status` の `interface_version` が `"3"`（今の `"2"` の試験を直す） |
+| `test_node_result_depth_measured` | 偽の hve で依頼すると、結果の盤の `depth_measured` が、同じ材料で `panels.make_panel_tops` が返す値と一致する（**true の盤と false の盤の両方が出る場面で**。材料に無ければ、`locate_core` の結果を差し替えて作る） |
+| `test_node_result_missing_depth_measured` | `depth_measured` の無い盤の dict を `_make_result` に渡すと例外 |
+| `test_format_result_depth_mark` | `depth_measured` が false の盤は奥行きのうしろに `*` が付き、表の下に 1 行出る。全部 true なら `*` も 1 行も出ない |
+| `test_cli_json_has_depth_measured` | `--json` の記録の盤に `depth_measured` がある |
+| `test_cli_version_mismatch` | 本システムが `"2"` を出すと、道具は依頼を送らずに版が合わないと言って終わる（今の試験を `"3"` に合わせて直す） |
+| 既存 | 版 `"2"` を前提にした試験は `"3"` に直す（**直したものを報告に列挙する**） |
+
+**変異チェック（実装管理担当が自分で回す）**: (1) `_make_result` で `depth_measured` を常に true にする（**本番の経路を縛る**）、(2) ノードの版を `"2"` のままにする、(3) 表で `depth_measured` を見ない、のそれぞれで試験が落ちること。
 
 ## `WP-LOC-03` 口の版 2
 

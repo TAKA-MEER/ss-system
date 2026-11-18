@@ -181,6 +181,13 @@
 | `SendResult.cleanup_limit_s` | `locate_core.py` | 結果の `cleanup_limit_s` に入れる値 |
 | `INTERFACE_VERSION` | `locator_node.py` | `"2"` |
 
+## 9a. 口の版 3 で足す名前（`WP-LOC-04`。[-locate.md](DetailedDesign-locate.md) §2.3）
+
+| 名前 | 種類 | 中身 |
+| --- | --- | --- |
+| `PanelTop.depth_measured` | `ss_msgs` の型（最後のフィールド） | 奥行きを測ったか（[-core.md](DetailedDesign-core.md) §4.1） |
+| `INTERFACE_VERSION` | `locator_node.py`・`locate_view.py` | `"3"` |
+
 ## 10. hve-system のカメラモジュールとつなぐ（[-hve.md](DetailedDesign-hve.md) §7。2026-11-17 実装済み）
 
 相手側の名前（`aim`・`state` のフィールド・応答ヘッダ・止めた理由）は hve の文書が正（§1）。

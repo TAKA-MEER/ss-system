@@ -74,7 +74,7 @@
 | `lugs` | int32 | 使った吊り金具の数 |
 | `front_known` | bool | 正面が分かっている（背中合わせの盤など。追加の情報。使わなくてよい） |
 | `front_yaw_rad` | float64 | `front_known` のとき、正面の向き（中心から正面の辺へ向かう向き）。そうでなければ 0 |
-| `depth_measured` | bool | **版 3 の案（2026-11-18。fk-system の確認待ち。まだ型に入れない）。**奥行きを測ったか。一番手前と一番奥の金具の列を、どちらも写したとき true。そうでなければ false で、奥行きと中心の前後の位置は `two_lug_depth_default_m` から決めた値（[-core.md](DetailedDesign-core.md) §4.1。[Spec.md](../spec/Spec.md) §1.1） |
+| `depth_measured` | bool | **版 3（2026-11-18。fk-system が承認）。**奥行きを測ったか。一番手前と一番奥の金具の列を、どちらも写したとき true。そうでなければ false で、奥行きと中心の前後の位置は `two_lug_depth_default_m` から決めた値（[-core.md](DetailedDesign-core.md) §4.1。[Spec.md](../spec/Spec.md) §1.1） |
 
 ### 2.4 終わり方（`reason`）
 
@@ -116,7 +116,7 @@
 | フィールド | 型 | 意味 |
 | --- | --- | --- |
 | `header` | std_msgs/Header | 出した時刻 |
-| `interface_version` | string | この口の版。**`"2"`**（2026-11-16。理由 2 つと `cleanup_limit_s` を足した）。依頼する側は自分が知っている版と照合する |
+| `interface_version` | string | この口の版。**`"3"`**（2026-11-18。`PanelTop.depth_measured` を足した。版 2 は 2026-11-16 で、理由 2 つと `cleanup_limit_s` を足した）。依頼する側は自分が知っている版と照合する |
 | `phase` | string | `IDLE`（受けられる）／ `RUNNING`（依頼を実行中）／ `CLEANING`（結果を返し、後片付け中） |
 | `goal_id` | unique_identifier_msgs/UUID | 実行中・後片付け中の依頼。`IDLE` のときは全 0 |
 | `last_reject_reason` | string | 最後に拒否した依頼の理由（`busy`／`bad_range`／`bad_distance`／`bad_time_limit`）。無ければ空 |

@@ -74,6 +74,7 @@
 | --- | --- |
 | 方位・距離 | 中心の `atan2(y, x)`・`hypot(x, y)`（機体の原点から） |
 | 向き | `yaw_rad`（基準の辺の向き）を度に |
+| 奥行 | `depth_m`。**`depth_measured` が false なら数のうしろに `*` を付け、表の下に「* 奥行きは測っていない（既定値）」を 1 行出す**（版 3。2026-11-18） |
 | 正面 | `front_known` なら `front_yaw_rad` を度に。そうでなければ `-` |
 | 向きσ | `yaw_std_deg` が 90 以上なら数の代わりに `不明`（対角の吊り金具 2 個だけの盤。[-core.md](DetailedDesign-core.md) §4） |
 | 見た範囲 | `seen_from_rad[i]`〜`seen_from_rad[i] + seen_span_rad[i]` を度で並べる。無ければ `なし` |
