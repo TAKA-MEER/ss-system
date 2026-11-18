@@ -137,6 +137,32 @@ def test_fit_too_few_after_reject():
         _fit(obs)
 
 
+def test_fit_skips_empty_observations():
+    # 金具が写らない向き（検出 0 個）の観測は当てはめに使わず、n=0 と示す。
+    # `[]`（形 (0,)）と (0,2) の両方で落ちないこと。
+    obs = _observations()
+    obs.append({"yaw_rad": 0.0, "pitch_down_rad": math.radians(45.0),
+                "pixels": []})
+    obs.append({"yaw_rad": math.radians(5.0), "pitch_down_rad": math.radians(45.0),
+                "pixels": np.zeros((0, 2))})
+    result = _fit(obs)
+    assert math.degrees(abs(result.pitch_offset_rad - TRUE["pitch_offset_rad"])) < 0.05
+    assert math.degrees(abs(result.yaw_offset_rad - TRUE["yaw_offset_rad"])) < 0.05
+    assert math.degrees(abs(result.roll_rad - TRUE["roll_rad"])) < 0.05
+    assert result.rejected == []
+    assert len(result.residuals) == len(obs)
+    assert result.residuals[-2] == {"mean_m": 0.0, "max_m": 0.0, "n": 0}
+    assert result.residuals[-1] == {"mean_m": 0.0, "max_m": 0.0, "n": 0}
+    assert all(r["n"] == 3 for r in result.residuals[:-2])
+
+
+def test_fit_ground_point_empty():
+    from ss_locator.mount_fit import ground_point
+    T = G.camera_T(HEIGHT_M, 0.0, math.radians(45.0), **MOUNT, **TRUE)
+    assert ground_point([], K, DIST, T, TOP_HEIGHT_M).shape == (0, 2)
+    assert ground_point(np.zeros((0, 2)), K, DIST, T, TOP_HEIGHT_M).shape == (0, 2)
+
+
 def test_fit_too_few():
     obs = _observations()
     with pytest.raises(FitError, match="at least 2"):

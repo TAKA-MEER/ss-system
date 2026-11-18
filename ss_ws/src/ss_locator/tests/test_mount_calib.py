@@ -194,6 +194,79 @@ def test_calib_reject_m_passed(tmp_path, capsys):
     assert out.count("rejected:") == len(POSES_DEG)
 
 
+def test_calib_from_empty_observation(tmp_path, capsys):
+    # `--from` で読んだ json の `pixels: []`（検出 0 個）でも落ちず、
+    # その観測の行が n=0 になる。
+    observations = []
+    for yaw_deg, pitch_deg in POSES_DEG:
+        T = G.camera_T(HEIGHT_M, math.radians(yaw_deg), math.radians(pitch_deg),
+                       **MOUNT, **TRUE)
+        pts = np.c_[LUGS, np.full(len(LUGS), TOP_HEIGHT_M)]
+        uv, ok = G.project(pts, K, DIST, T, 1280, 720)
+        assert ok.all()
+        observations.append({"yaw_rad": math.radians(yaw_deg),
+                             "pitch_down_rad": math.radians(pitch_deg),
+                             "pixels": uv.tolist(), "photo": "frame.jpg"})
+    observations.append({"yaw_rad": 0.0, "pitch_down_rad": math.radians(45.0),
+                         "pixels": [], "photo": "frame.jpg"})
+    data = {"lugs": LUGS.tolist(), "top_height_m": TOP_HEIGHT_M,
+            "lift_height_m": HEIGHT_M, "height_m": HEIGHT_M,
+            "camera_K": K.ravel().tolist(), "camera_dist": DIST.tolist(),
+            "camera_mount_x_m": 0.0, "camera_mount_y_m": 0.0,
+            "camera_forward_offset_m": 0.08, "camera_optical_offset_m": 0.06,
+            "camera_height_offset_m": 0.0, "observations": observations}
+    (tmp_path / "observations.json").write_text(json.dumps(data))
+    code = main(["--from", str(tmp_path),
+                 "--params-file", str(tmp_path / "none.yaml")])
+    assert code == 0
+    out = capsys.readouterr().out
+    lines = _offsets_from_output(out)
+    assert abs(lines["camera_pitch_offset_deg"] - (-2.6)) < 0.05
+    assert abs(lines["camera_yaw_offset_deg"] - (-5.4)) < 0.05
+    assert abs(lines["camera_roll_deg"] - 4.1) < 0.05
+    empty_lines = [ln for ln in out.splitlines()
+                   if ln.startswith("observation %d:" % (len(observations) - 1))]
+    assert len(empty_lines) == 1
+    assert "n=0" in empty_lines[0]
+
+
+def test_calib_captures_empty_observation(tmp_path, capsys):
+    # 撮る経路でも、金具が写らない向きでは検出 0 個の観測が n=0 になる。
+    class EmptyAt45Detector(FakeCalibDetector):
+        def detect(self, image):
+            if abs(self.camera.pitch_down_rad - math.radians(45.0)) < 1e-9:
+                return np.zeros((0, 4, 2), np.float32), np.zeros(0, np.float32)
+            return super().detect(image)
+
+    camera = FakeCalibCamera()
+    detector = EmptyAt45Detector(camera)
+    lugs = ";".join("%.2f,%.2f" % (x, y) for x, y in LUGS)
+    poses = POSES_DEG + [(0.0, 45.0)]
+    params = {
+        "camera_K": K.ravel().tolist(), "camera_dist": DIST.tolist(),
+        "camera_mount_x_m": 0.0, "camera_mount_y_m": 0.0,
+        "camera_forward_offset_m": 0.08, "camera_optical_offset_m": 0.06,
+        "camera_height_offset_m": 0.0, "settle_s": 0.0, "aim_timeout_s": 1.0,
+    }
+    params_path = tmp_path / "params.yaml"
+    import yaml
+    params_path.write_text(yaml.safe_dump({"locator_node": {"ros__parameters": params}}))
+    argv = ["--lugs", lugs, "--top-height-m", str(TOP_HEIGHT_M),
+            "--lift-height-m", str(HEIGHT_M),
+            "--poses=" + ",".join("%.1f:%.1f" % p for p in poses),
+            "--params-file", str(params_path), "--out", str(tmp_path / "out")]
+    code = main(argv, camera_factory=lambda: camera,
+                detector_factory=lambda: detector)
+    assert code == 0
+    out = capsys.readouterr().out
+    empty_lines = [ln for ln in out.splitlines()
+                   if ln.startswith("observation %d:" % (len(poses) - 1))]
+    assert len(empty_lines) == 1
+    assert "n=0" in empty_lines[0]
+    saved = json.loads((tmp_path / "out" / "observations.json").read_text())
+    assert saved["observations"][-1]["pixels"] == []
+
+
 def test_calib_pose_unknown(tmp_path):
     camera = FakeCalibCamera(pose_known=False)
     argv, cam_f, det_f = _args(tmp_path, camera)

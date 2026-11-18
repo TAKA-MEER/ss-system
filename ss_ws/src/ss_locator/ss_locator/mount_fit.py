@@ -45,9 +45,24 @@ class FitResult:
     rejected: list = field(default_factory=list)
 
 
+def _pixels_array(pixels):
+    """画素の並び → (N,2)。検出 0 個は形を (0,2) にそろえる。
+
+    `[]`（json の `pixels: []`）をそのまま `atleast_2d` すると (1,0) になり、
+    検出 1 個と数えられて `undistort_rays` で落ちる。空観測は当てはめに
+    使わず `n=0` と示すため、ここで空の (0,2) に直す。
+    """
+    arr = np.asarray(pixels, float)
+    if arr.size == 0:
+        return np.zeros((0, 2))
+    return arr.reshape(-1, 2)
+
+
 def ground_point(px, K, dist, T, plane_z_m):
     """画素 (N,2) → 高さ `plane_z_m` の面との交点 (N,2)。平行・後ろ向きは nan。"""
-    px = np.atleast_2d(np.asarray(px, float))
+    px = _pixels_array(px)
+    if len(px) == 0:
+        return np.zeros((0, 2))
     C, d = undistort_rays(px, K, dist, T)
     dz = d[:, 2]
     t = np.where(np.abs(dz) < 1e-12, np.nan, (plane_z_m - C[2]) / dz)
@@ -179,10 +194,12 @@ def fit_mount_offsets(observations, lugs_xy, K, dist, *, height_m, top_height_m,
     if len(lugs_xy) < 2:
         raise FitError(
             "measured lugs too few: need at least 2, got %d" % len(lugs_xy))
+    # 検出 0 個の観測は当てはめに使わない（`active` から外れる）。形は
+    # `_pixels_array` で (0,2) にそろえ、出力の観測ごとの行で n=0 と示す。
     observations = [
         {"yaw_rad": float(o["yaw_rad"]),
          "pitch_down_rad": float(o["pitch_down_rad"]),
-         "pixels": np.atleast_2d(np.asarray(o["pixels"], float))}
+         "pixels": _pixels_array(o["pixels"])}
         for o in observations
     ]
     n_pixels = sum(len(o["pixels"]) for o in observations)
