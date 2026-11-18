@@ -87,6 +87,56 @@ def test_fit_fixed_height():
     assert math.degrees(abs(result.roll_rad - TRUE["roll_rad"])) < 0.05
 
 
+def test_fit_rejects_outlier():
+    # どの測った金具からも 1 m 以上離れた点に下りる画素を 1 個足しても、
+    # 0.05° 以内に戻り、外した検出にその 1 個だけが入る。
+    obs = _observations()
+    obs[0]["pixels"] = np.vstack([obs[0]["pixels"], [[1279.0, 360.0]]])
+    result = _fit(obs)
+    assert math.degrees(abs(result.pitch_offset_rad - TRUE["pitch_offset_rad"])) < 0.05
+    assert math.degrees(abs(result.yaw_offset_rad - TRUE["yaw_offset_rad"])) < 0.05
+    assert math.degrees(abs(result.roll_rad - TRUE["roll_rad"])) < 0.05
+    assert len(result.rejected) == 1
+    assert result.rejected[0]["observation"] == 0
+    assert result.rejected[0]["pixel"] == [1279.0, 360.0]
+    assert result.rejected[0]["distance_m"] > 0.3
+    assert result.residuals[0]["n"] == 3
+
+
+def test_fit_rejects_outlier_grid():
+    # 外れた検出が数個あると、格子の始める値を引っぱる。頭打ちがあると戻る。
+    obs = _observations()
+    for o in obs:
+        o["pixels"] = np.vstack([o["pixels"], [[1279.0, 360.0]]])
+    result = _fit(obs)
+    assert math.degrees(abs(result.pitch_offset_rad - TRUE["pitch_offset_rad"])) < 0.05
+    assert math.degrees(abs(result.yaw_offset_rad - TRUE["yaw_offset_rad"])) < 0.05
+    assert math.degrees(abs(result.roll_rad - TRUE["roll_rad"])) < 0.05
+    assert len(result.rejected) == len(obs)
+    assert all(r["pixel"] == [1279.0, 360.0] for r in result.rejected)
+
+
+def test_fit_keeps_inliers():
+    result = _fit(_observations(noise_px=0.5, seed=7))
+    assert result.rejected == []
+
+
+def test_fit_too_few_after_reject():
+    # 1 個の金具の検出だけが残り、ほかは遠い検出として外されると FitError。
+    obs = []
+    for yaw_deg, pitch_deg in POSES:
+        T = G.camera_T(HEIGHT_M, math.radians(yaw_deg), math.radians(pitch_deg),
+                       **MOUNT, **TRUE)
+        pts = np.c_[LUGS[:1], np.full(1, TOP_HEIGHT_M)]
+        uv, ok = G.project(pts, K, DIST, T, 1280, 720)
+        assert ok.all()
+        uv = np.vstack([uv, [[1279.0, 360.0]]])
+        obs.append({"yaw_rad": math.radians(yaw_deg),
+                    "pitch_down_rad": math.radians(pitch_deg), "pixels": uv})
+    with pytest.raises(FitError, match="at least 2"):
+        _fit(obs)
+
+
 def test_fit_too_few():
     obs = _observations()
     with pytest.raises(FitError, match="at least 2"):

@@ -12,7 +12,8 @@
 `main` は工場関数を引数で受けられる。
 
 詳細設計: `docs/plan/detailed/DetailedDesign-core.md` §2.1、
-`docs/plan/detailed/DetailedDesign-names.md` §11（`WP-CAL-02`）。
+`docs/plan/detailed/DetailedDesign-names.md` §11（`WP-CAL-02`、
+外れた検出を捨てる `WP-CAL-03`）。
 """
 from __future__ import annotations
 
@@ -32,6 +33,7 @@ DEFAULT_PARAMS_FILE = str(
     Path(__file__).resolve().parent.parent / "config" / "locator.yaml"
 )
 DEFAULT_HOST = "192.168.5.129"
+REJECT_M = 0.3
 
 
 class CalibError(Exception):
@@ -171,10 +173,11 @@ def capture_observations(camera, detector, poses, *, settle_s=0.0,
 
 
 # ------------------------------------------------------------------ 当てる・出す
-def fit_from_data(data, params, fit_height=None):
+def fit_from_data(data, params, fit_height=None, reject_m=None):
     """`observations.json` の中身とパラメータ → `FitResult`。
 
     `fit_height` を渡すと json の値より優先する（コマンドラインの `--fit-height`）。
+    `reject_m` を渡すと json の値（`reject_m`）より優先する（`--reject-m`）。
     """
     K = np.asarray(params.get("camera_K", data.get("camera_K")), float)
     dist = np.asarray(params.get("camera_dist", data.get("camera_dist")), float)
@@ -204,6 +207,8 @@ def fit_from_data(data, params, fit_height=None):
                                 _float(data, "camera_optical_offset_m", 0.0)),
         fit_height=(bool(data.get("fit_height", False))
                     if fit_height is None else bool(fit_height)),
+        reject_m=float(data.get("reject_m", REJECT_M))
+        if reject_m is None else float(reject_m),
     )
 
 
@@ -221,6 +226,11 @@ def report(result, fit_height=False):
         print("observation %d: n=%d mean=%.4f m max=%.4f m"
               % (i, r["n"], r["mean_m"], r["max_m"]))
     print("mean=%.4f m max=%.4f m" % (result.mean_m, result.max_m))
+    for rej in getattr(result, "rejected", []):
+        pixel = rej.get("pixel", [])
+        print("rejected: observation %s pixel (%.1f, %.1f) distance=%.4f m"
+              % (rej.get("observation"), float(pixel[0]), float(pixel[1]),
+                 float(rej.get("distance_m"))))
 
 
 def _save_observations(out_dir, observations, data):
@@ -259,6 +269,7 @@ def _build_parser():
     p.add_argument("--out", default="")
     p.add_argument("--from", dest="from_dir", default="")
     p.add_argument("--fit-height", action="store_true")
+    p.add_argument("--reject-m", type=float, default=REJECT_M)
     return p
 
 
@@ -275,7 +286,8 @@ def main(argv=None, camera_factory=None, detector_factory=None):
             return 1
         fit_height = bool(args.fit_height) or bool(data.get("fit_height", False))
         try:
-            result = fit_from_data(data, params, fit_height=fit_height)
+            result = fit_from_data(data, params, fit_height=fit_height,
+                                   reject_m=args.reject_m)
         except FitError as error:
             print(str(error), file=sys.stderr)
             return 1
@@ -325,6 +337,7 @@ def main(argv=None, camera_factory=None, detector_factory=None):
         "camera_optical_offset_m": _float(params, "camera_optical_offset_m", 0.0),
         "camera_height_offset_m": _float(params, "camera_height_offset_m", 0.0),
         "fit_height": bool(args.fit_height),
+        "reject_m": float(args.reject_m),
         "observations": [],
     }
     try:
@@ -343,7 +356,8 @@ def main(argv=None, camera_factory=None, detector_factory=None):
              "pixels": np.asarray(o["pixels"], float).tolist()}
             for o in observations]
     try:
-        result = fit_from_data(data, params, fit_height=bool(args.fit_height))
+        result = fit_from_data(data, params, fit_height=bool(args.fit_height),
+                               reject_m=args.reject_m)
     except FitError as error:
         print(str(error), file=sys.stderr)
         return 1

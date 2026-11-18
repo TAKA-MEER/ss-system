@@ -114,6 +114,86 @@ def test_calib_offline(tmp_path, capsys):
     assert abs(lines["camera_roll_deg"] - 4.1) < 0.05
 
 
+def _offsets_from_output(text):
+    lines = {ln.split(":")[0]: float(ln.split(":")[1])
+             for ln in text.splitlines()
+             if ln.startswith("camera_") and ":" in ln}
+    return lines
+
+
+def test_calib_real_mock_outlier(tmp_path, capsys):
+    # 2026-11-18 の実機の観測（DetailedDesign-packets.md WP-CAL-03）。
+    # (340, 110) が外され、ヨー −1.5°・ロール +3.2° 付近になり 0 で終わる。
+    raw = [
+        (0.0, 25.0, [(170, 609)]),
+        (13.5, 25.0, [(258, 529), (591, 547), (340, 110)]),
+        (23.1, 25.0, [(449, 503), (777, 539)]),
+        (35.7, 25.0, [(752, 482), (1088, 550)]),
+        (46.7, 25.0, [(1075, 489)]),
+        (24.1, 20.0, [(492, 578), (820, 616)]),
+        (23.5, 30.0, [(465, 375), (790, 416)]),
+    ]
+    data = {
+        "lugs": [[1.989, 0.575], [1.989, 1.095]],
+        "top_height_m": 0.78, "lift_height_m": 0.0, "height_m": 1.82,
+        "camera_K": [1482.80, 0.0, 638.13, 0.0, 1482.66, 367.04, 0.0, 0.0, 1.0],
+        "camera_dist": [0.02116, -0.27909, 0.0, 0.0, 0.0],
+        "camera_mount_x_m": 0.0, "camera_mount_y_m": 0.0,
+        "camera_forward_offset_m": 0.08, "camera_optical_offset_m": 0.06,
+        "camera_height_offset_m": 1.82,
+        "observations": [
+            {"yaw_rad": math.radians(yaw), "pitch_down_rad": math.radians(pitch),
+             "pixels": [list(p) for p in pixels], "photo": "frame.jpg"}
+            for yaw, pitch, pixels in raw
+        ],
+    }
+    (tmp_path / "observations.json").write_text(json.dumps(data))
+    code = main(["--from", str(tmp_path),
+                 "--params-file", str(tmp_path / "none.yaml")])
+    assert code == 0
+    out = capsys.readouterr().out
+    lines = _offsets_from_output(out)
+    assert abs(lines["camera_yaw_offset_deg"] - (-1.5)) < 0.3
+    assert abs(lines["camera_roll_deg"] - 3.2) < 0.3
+    rejected_lines = [ln for ln in out.splitlines() if ln.startswith("rejected:")]
+    assert len(rejected_lines) == 1
+    assert "340.0" in rejected_lines[0] and "110.0" in rejected_lines[0]
+
+
+def test_calib_reject_m_passed(tmp_path, capsys):
+    # --reject-m 5.0（既定と違う値）で回すと、遠い検出を外さない。
+    # 道具が引数を渡さない変異（既定 0.3 で動く）を落とす。
+    observations = []
+    for yaw_deg, pitch_deg in POSES_DEG:
+        T = G.camera_T(HEIGHT_M, math.radians(yaw_deg), math.radians(pitch_deg),
+                       **MOUNT, **TRUE)
+        pts = np.c_[LUGS, np.full(len(LUGS), TOP_HEIGHT_M)]
+        uv, ok = G.project(pts, K, DIST, T, 1280, 720)
+        assert ok.all()
+        uv = np.vstack([uv, [[1279.0, 360.0]]])
+        observations.append({"yaw_rad": math.radians(yaw_deg),
+                             "pitch_down_rad": math.radians(pitch_deg),
+                             "pixels": uv.tolist(), "photo": "frame.jpg"})
+    data = {"lugs": LUGS.tolist(), "top_height_m": TOP_HEIGHT_M,
+            "lift_height_m": HEIGHT_M, "height_m": HEIGHT_M,
+            "camera_K": K.ravel().tolist(), "camera_dist": DIST.tolist(),
+            "camera_mount_x_m": 0.0, "camera_mount_y_m": 0.0,
+            "camera_forward_offset_m": 0.08, "camera_optical_offset_m": 0.06,
+            "camera_height_offset_m": 0.0, "observations": observations}
+    (tmp_path / "observations.json").write_text(json.dumps(data))
+    code = main(["--from", str(tmp_path), "--reject-m", "5.0",
+                 "--params-file", str(tmp_path / "none.yaml")])
+    assert code == 0
+    out = capsys.readouterr().out
+    assert "rejected:" not in out
+    # 既定（0.3）なら同じ観測で外す。
+    code = main(["--from", str(tmp_path),
+                 "--params-file", str(tmp_path / "none.yaml")])
+    assert code == 0
+    out = capsys.readouterr().out
+    assert out.count("rejected:") == len(POSES_DEG)
+
+
 def test_calib_pose_unknown(tmp_path):
     camera = FakeCalibCamera(pose_known=False)
     argv, cam_f, det_f = _args(tmp_path, camera)
