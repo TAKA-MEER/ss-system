@@ -365,10 +365,16 @@ def test_seam_diagonal_three():
     # 継ぎ目の 3 個。斜めの組は捨てられ、直角の組（片方の列の 2 個）が選ばれる
     lugs = _pair_at(2.3825, target=(2.0, 0.0))
     lugs.append(_lug_toward((2.5175, 0.265), (2.9, 0.265)))
+    # 斜めの組（lugs[0] と lugs[2]）の確信度を高くする（①だけでは拾えない）
+    lugs[0]["conf"] = 0.9
+    lugs[2]["conf"] = 0.9
+    lugs[1]["conf"] = 0.1
     tops = _tops([], lugs)
     assert len(tops) == 1
     assert tops[0]["lugs"] == 2
     assert tops[0]["depth_m"] == pytest.approx(0.86)
+    # 直角の組（片方の列の 2 個）の中心。斜めの組なら (2.10, 0.09) になる
+    assert (tops[0]["x_m"], tops[0]["y_m"]) == pytest.approx((2.02, 0.0), abs=0.02)
 
 
 def test_back_to_back_gates():
