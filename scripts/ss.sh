@@ -17,8 +17,9 @@ usage() {
 使い方: scripts/ss.sh <やること> [引数]
 
 やること:
-  start [--camera-host <IP>] [--lift-host <名前かIP>] [--fakes]
-      本システムを起こす
+  start [--camera-host <IP>] [--lift-host <名前かIP>] [--fakes] [--record] [--save-images]
+      本システムを起こす（--record は撮影の記録を out/shots-<時刻>/ に残す。
+      --save-images は静止画も残す（--record を兼ねる。実物の写真なので残してよい現場でだけ））
   status
       状態を1回出す
   locate [locate_cli の引数]
@@ -61,7 +62,7 @@ fix_out_ownership() {
 }
 
 cmd_start() {
-  local camera_host="" lift_host="" use_fakes=0
+  local camera_host="" lift_host="" use_fakes=0 record=0 save_images=0
   while [ $# -gt 0 ]; do
     case "$1" in
       --camera-host)
@@ -73,6 +74,8 @@ cmd_start() {
         lift_host="$2"; shift 2 ;;
       --lift-host=*) lift_host="${1#--lift-host=}"; shift ;;
       --fakes) use_fakes=1; shift ;;
+      --record) record=1; shift ;;
+      --save-images) record=1; save_images=1; shift ;;
       *) usage; exit 2 ;;
     esac
   done
@@ -101,6 +104,14 @@ cmd_start() {
   fi
   if [ "$use_fakes" -eq 1 ]; then
     overrides+=(-p "use_fakes:=true")
+  fi
+  if [ "$record" -eq 1 ]; then
+    local shot_dir="out/shots-$(date +%Y%m%d-%H%M%S)"
+    overrides+=(-p "shot_log_dir:=$shot_dir")
+    if [ "$save_images" -eq 1 ]; then
+      overrides+=(-p "shot_save_images:=true")
+    fi
+    echo "撮影の記録: $shot_dir"
   fi
   # overrides は --params-file より後ろに付ける（引数の上書きが勝つため）
   local inner=". /opt/ros/humble/setup.bash && cd /ws/ss_ws && colcon build && . install/setup.bash && cd /ws && exec ros2 run ss_locator locator_node --ros-args --params-file ss_ws/src/ss_locator/config/locator.yaml"
@@ -206,6 +217,8 @@ cmd_stop() {
     fi
     "$SS_DOCKER" stop "$container_name"
     "$SS_DOCKER" rm -f "$container_name"
+    # 記録（out/）はコンテナの root が書くので、ホストの利用者の持ち物に直す
+    fix_out_ownership
     exit 0
   fi
   if container_exists; then

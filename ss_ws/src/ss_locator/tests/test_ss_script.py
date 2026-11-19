@@ -407,6 +407,40 @@ def test_calib_no_build(tmp_path) -> None:
     assert "ss_locator.mount_calib" in run
 
 
+def test_start_record(tmp_path) -> None:
+    result, lines = _run(tmp_path, ["start", "--record"])
+    assert result.returncode == 0, result.stderr
+    run = _find(lines, "run", "ss-system:dev")
+    params_at = run.index("--params-file")
+    assert params_at < run.index("shot_log_dir:=out/shots-")
+    assert re.search(r"shot_log_dir:=out/shots-\d{8}-\d{6}", run)
+    assert "shot_save_images" not in run
+    assert "撮影の記録: out/shots-" in result.stdout
+
+    result, lines = _run(tmp_path, ["start", "--save-images"])
+    assert result.returncode == 0, result.stderr
+    run = _find(lines, "run", "ss-system:dev")
+    params_at = run.index("--params-file")
+    assert params_at < run.index("shot_log_dir:=out/shots-")
+    assert params_at < run.index("shot_save_images:=true")
+
+    result, lines = _run(tmp_path, ["start"])
+    assert result.returncode == 0, result.stderr
+    run = _find(lines, "run", "ss-system:dev")
+    assert "shot_log_dir" not in run
+    assert "shot_save_images" not in run
+
+
+def test_stop_fixes_ownership(tmp_path) -> None:
+    result, lines = _run(
+        tmp_path, ["stop"], SS_FAKE_RUNNING="1", SS_FAKE_STATUS_OUTPUT=STATUS_IDLE
+    )
+    assert result.returncode == 0, result.stderr
+    stop_at = next(i for i, line in enumerate(lines) if line.startswith("stop "))
+    chowns = [i for i, line in enumerate(lines) if "chown" in line]
+    assert chowns and chowns[0] > stop_at
+
+
 def test_usage(tmp_path) -> None:
     result, _lines = _run(tmp_path, [])
     assert result.returncode == 2

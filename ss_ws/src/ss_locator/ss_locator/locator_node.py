@@ -27,7 +27,7 @@ from ss_msgs.action import LocatePanels
 from ss_msgs.msg import CleanupDone, LocatorStatus, PanelTop
 from unique_identifier_msgs.msg import UUID
 
-from . import assemble, geometry, scan_plan
+from . import assemble, geometry, scan_plan, shot_log
 from .detector import Detector
 from .fakes import FakeCamera, FakeDetector, FakeLift
 from .hve_camera import HveCamera
@@ -93,6 +93,8 @@ class LocatorNode(Node):
         self._core = LocateCore(self._core_parameters())
 
         self._frame_count = 0
+        self._shot_count = 0
+        self._shot_log_warned = False
         if self.use_fakes:
             self._detector = FakeDetector(self.fake_fixture, scene=self.fake_scene)
         else:
@@ -226,6 +228,9 @@ class LocatorNode(Node):
         self.declare_parameter("camera_state_timeout_ms", 600)
         self.declare_parameter("snapshot_min_interval_ms", 200)
 
+        self.declare_parameter("shot_log_dir", "")
+        self.declare_parameter("shot_save_images", False)
+
     def _read_parameters(self):
         def value(name):
             return self.get_parameter(name).value
@@ -285,6 +290,9 @@ class LocatorNode(Node):
         self.camera_cmd_period_ms = int(value("camera_cmd_period_ms"))
         self.camera_state_timeout_ms = int(value("camera_state_timeout_ms"))
         self.snapshot_min_interval_ms = int(value("snapshot_min_interval_ms"))
+
+        self.shot_log_dir = str(value("shot_log_dir"))
+        self.shot_save_images = bool(value("shot_save_images"))
 
         self.status_period_s = max(0.001, self.status_period_ms / 1000.0)
 
@@ -459,7 +467,50 @@ class LocatorNode(Node):
             view,
             self.top_height_default_m,
         )
+        self._record_shot(captured, keypoints, confidences, lugs)
         return [FrameDone(float(captured["yaw_rad"]), lugs, True)]
+
+    def _record_shot(self, captured, keypoints, confidences, lugs):
+        """撮影の記録を書く。書けなくても出来事は変えない（警告は 1 回）。"""
+        if not self.shot_log_dir:
+            return
+        shot = self._shot_count
+        self._shot_count += 1
+        try:
+            if self.use_fakes:
+                lift_height = camera_height = pitch = image = None
+            else:
+                lift_height = float(self._last_lift.height_m)
+                camera_height = lift_height + self.camera_height_offset_m
+                pitch = float(captured["pitch_down_rad"])
+                image = captured["image"] if self.shot_save_images else None
+            photo = shot_log.photo_name(shot) if image is not None else None
+            record = shot_log.shot_record(
+                shot,
+                lift_height_m=lift_height,
+                camera_height_m=camera_height,
+                yaw_rad=captured["yaw_rad"],
+                pitch_down_rad=pitch,
+                keypoints=keypoints,
+                confidences=confidences,
+                lugs=lugs,
+                photo=photo,
+                fit_parameters={
+                    "camera_pitch_offset_deg": self.camera_pitch_offset_deg,
+                    "camera_yaw_offset_deg": self.camera_yaw_offset_deg,
+                    "camera_roll_deg": self.camera_roll_deg,
+                    "camera_height_offset_m": self.camera_height_offset_m,
+                    "top_height_default_m": self.top_height_default_m,
+                },
+            )
+            shot_log.append_shot(self.shot_log_dir, record, image)
+        except Exception as error:
+            if not self._shot_log_warned:
+                self._shot_log_warned = True
+                self.get_logger().warning(
+                    "撮影の記録を書けない（以後は記録しない）: %s: %s"
+                    % (type(error).__name__, error)
+                )
 
     def _camera_parameters(self, captured):
         """偽のときだけ材料の `T` を使い、本物では `geometry.camera_T` で作る（分岐はここだけ）。
