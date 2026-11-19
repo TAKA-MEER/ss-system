@@ -122,6 +122,20 @@
 | `calib [mount_calib の引数]` | **`ss-system` が動いていれば撮らない**（どちらもカメラを動かすため。`--from` だけのときは動いていてもよい）。別のコンテナ（`docker run --rm`、`--network host`。端末なら `-it`）で `mount_calib` を起こす。**`colcon build` はしない**（動いている `locator_node` の `ss_ws/build`・`install` を書き換えないため）。`cd /ws && PYTHONPATH=ss_ws/src/ss_locator python3 -m ss_locator.mount_calib …` で起こす。**`--params-file` が無ければ `ss_ws/src/ss_locator/config/locator.yaml` を足す**。`--out`・`--from` がどちらも無ければ `--out out/calib-<時刻>` を足す。終わったら `out/` の持ち主を直す | `mount_calib` のまま。動いているので撮れない → 1 |
 | それ以外・引数なし | 使い方を出す | 2 |
 
+## 7a. 撮影の記録（`WP-TEST-03`。2026-11-19 案）
+
+[Spec-tester.md](../spec/Spec-tester.md) §3「撮影の記録」。**記録するのは `locator_node`**（静止画と検出を持っているのはノードだけ）。道具（`locate_cli`）は変えない。
+
+| 項目 | 決まり |
+| --- | --- |
+| パラメータ | `shot_log_dir`（文字列。既定 `""` = 記録しない。`/ws` からの相対でも絶対でもよい）・`shot_save_images`（真偽。既定 false。`shot_log_dir` が空なら効かない）。`locator.yaml` には既定のまま足す |
+| 書く場所 | `<shot_log_dir>/shots.jsonl`（1 枚 1 行で足していく）。静止画は `<shot_log_dir>/shot_<6 桁の通し番号>.jpg`。フォルダが無ければ作る |
+| 書く時 | `_frame_events` の本物の道で、検出と床への戻し（`assemble.lift`）が済んだ 1 枚ごと（`FrameDone(..., True)` を返す枚）。偽の道（`use_fakes`）でも書く（静止画は無いので `photo` は `null`。試験のため） |
+| 1 行の中身 | `time`（UNIX 秒）・`shot`（通し番号。ノードを起こしてから 0 始まり）・`lift_height_m`（偽の道は `null`）・`camera_height_m`（偽の道は `null`）・`yaw_rad`・`pitch_down_rad`（偽の道は `null` でよい）・`keypoints`（検出器の出力のまま。金具ごとに 4 点の `[x, y]`。画素）・`confidences`（金具ごと）・`lugs`（床へ戻した金具。`[x, y]` の並び。ローカル座標・m）・`photo`（ファイル名か `null`）・あわせて当てはめ直しに要る値 `camera_pitch_offset_deg`・`camera_yaw_offset_deg`・`camera_roll_deg`・`camera_height_offset_m`・`top_height_default_m` |
+| 失敗 | 書けない（フォルダが作れない・ディスク満杯など）ときは警告を 1 回ログに出し、**依頼の流れ（返す出来事）は変えない** |
+| `ss.sh start` | `--record` で `-p shot_log_dir:=out/shots-<YYYYmmdd-HHMMSS>` を足し、そのフォルダ名を出す。`--save-images` は `--record` も兼ね、さらに `-p shot_save_images:=true` を足す |
+| `ss.sh stop` | コンテナを止めたあと、`out/` があれば持ち主を直す（`chown`。`locate` と同じ） |
+
 ## 8. この案で決めないもの
 
 | もの | どこで |

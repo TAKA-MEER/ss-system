@@ -28,6 +28,7 @@
 | `WP-CAL-02` | カメラの取り付け（光軸に沿った距離・角度のずれ）と校正の道具 | `WP-CAL-01` | 済み（2026-11-18 マージ） |
 | `WP-CAL-03` | 校正の道具で外れた検出を捨てる | `WP-CAL-02` | 済み（2026-11-18 マージ） |
 | `WP-TEST-02` | ホストから起こすスクリプト（`scripts/ss.sh`）と `test_cli_busy` の揺れの直し | `WP-TEST-01`・`WP-CAL-03` | 済み（2026-11-19 マージ） |
+| `WP-TEST-03` | 撮影の記録（1 枚ごとの向き・高さ・検出、求めたときだけ静止画） | `WP-TEST-02` | 着手（2026-11-19） |
 
 先行試作は `../../lifting-lug-pose` の `9265d2d`。**試作のリポジトリは読むだけで、書き換えない。**
 
@@ -682,3 +683,40 @@ scripts/ss.sh stop                 # 0。コンテナが残らない
 | `test_repo_root_from_anywhere` | 別のフォルダを作業場所にして呼んでも、`/ws` に mount されるのはリポジトリ直下 |
 
 **変異チェック（実装管理担当が自分で回す）**: (1) `start` で `--params-file` を落とす、(2) `stop` で `phase` を見ない、(3) `calib` で動いているかを見ない、(4) `locate` で `locate_cli` の終了コードを捨てて 0 にする、(5) `calib` で `colcon build` する、(6) `test_cli_busy` で最初の依頼を放すのを試験の 2 つ目の依頼の前にする（直しが効いていれば落ちる）、のそれぞれで試験が落ちること。
+
+## `WP-TEST-03` 撮影の記録
+
+**状態: 2026-11-19 着手。**
+
+**読む節**: [-tester.md](DetailedDesign-tester.md) §7・§7a、`ss_locator/locator_node.py`（`_frame_events`・`_camera_parameters`・パラメータの宣言と読み込み）、`tests/test_locator_node.py`・`tests/test_ss_script.py`（書き方の手本）。
+
+| やること | 中身 |
+| --- | --- |
+| ノード | `locator_node.py` に `shot_log_dir`・`shot_save_images` を足し、[-tester.md](DetailedDesign-tester.md) §7a のとおり 1 枚ごとに書く。書くのは小さな関数（例 `shot_record(...)` が 1 行の dict を作る・`append_shot(dir, record, image)` が書く）に分け、`_frame_events` からは 1 か所で呼ぶ |
+| 設定 | `config/locator.yaml` に `shot_log_dir: ""`・`shot_save_images: false` を足す |
+| スクリプト | `scripts/ss.sh` の `start` に `--record`・`--save-images`、`stop` の後の `chown`。使い方の文（`usage`）も直す |
+| 文書 | `docs/使い方.md` §4 の表に `--record`・`--save-images` を足し、記録の場所と「静止画は実物の写真。残してよい現場でだけ」を書く |
+| 変えないもの | 依頼の流れ（`locate_core.py`）・口（`ss_msgs`）・`locate_cli.py`・`mount_calib.py` |
+
+**受け入れ条件**:
+
+```bash
+docker run --rm -v "$PWD":/ws ss-system:dev bash scripts/test.sh   # 0 で終わる（今までの試験も通る）
+bash -n scripts/ss.sh
+# 実装管理担当がホストで（本物の docker）:
+scripts/ss.sh start --fakes --record   # 記録のフォルダ名と状態の 1 行
+scripts/ss.sh locate --yes             # 0
+scripts/ss.sh stop                     # 0。out/shots-<時刻>/shots.jsonl に行があり、持ち主がホストの利用者
+```
+
+| 試験 | 確かめること |
+| --- | --- |
+| `test_shot_log_off_by_default` | `shot_log_dir` が空なら、偽の hve で依頼を最後まで流してもファイルを 1 つも書かない |
+| `test_shot_log_writes_lines` | `shot_log_dir` を一時フォルダにして偽の hve で依頼を流すと、`shots.jsonl` に撮った枚数ぶんの行ができ、各行に §7a の鍵がそろい、`lugs` が `FrameDone` に渡した金具と同じ |
+| `test_shot_log_real_path_fields` | 本物の道（偽のカメラ・検出器・昇降機をノードに差し込む。手本は `test_locator_node.py` の差し替え）で、`lift_height_m`・`camera_height_m`（昇降の高さ＋`camera_height_offset_m`）・`yaw_rad`・`pitch_down_rad` が撮った静止画の値と一致する |
+| `test_shot_images_only_when_asked` | `shot_save_images` が false なら jpg を書かず `photo` が `null`。true なら `shot_000000.jpg` ができ、`photo` がその名前 |
+| `test_shot_log_failure_does_not_break` | 書けない場所（ファイルを置いて、そこをフォルダとして指す）でも、返す出来事が記録なしのときと同じ |
+| `test_start_record` | `start --record` で `shot_log_dir:=out/shots-<時刻>` が `--params-file` より後ろに付き、`shot_save_images` は付かない。`--save-images` なら両方付く。どちらも付けなければどちらも付かない |
+| `test_stop_fixes_ownership` | `stop` で `docker stop` のあとに `chown` を呼ぶ |
+
+**変異チェック（実装管理担当が自分で回す）**: (1) `_frame_events` から記録の呼び出しを消す、(2) `shot_save_images` を見ずにいつも静止画を書く、(3) `camera_height_m` に `camera_height_offset_m` を足さない、(4) 書けないときの例外を握らない、(5) `start --record` で `shot_log_dir` を渡さない、のそれぞれで試験が落ちること。
