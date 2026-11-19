@@ -28,7 +28,7 @@
 | `WP-CAL-02` | カメラの取り付け（光軸に沿った距離・角度のずれ）と校正の道具 | `WP-CAL-01` | 済み（2026-11-18 マージ） |
 | `WP-CAL-03` | 校正の道具で外れた検出を捨てる | `WP-CAL-02` | 済み（2026-11-18 マージ） |
 | `WP-TEST-02` | ホストから起こすスクリプト（`scripts/ss.sh`）と `test_cli_busy` の揺れの直し | `WP-TEST-01`・`WP-CAL-03` | 済み（2026-11-19 マージ） |
-| `WP-TEST-03` | 撮影の記録（1 枚ごとの向き・高さ・検出、求めたときだけ静止画） | `WP-TEST-02` | 着手（2026-11-19） |
+| `WP-TEST-03` | 撮影の記録（1 枚ごとの向き・高さ・検出、求めたときだけ静止画） | `WP-TEST-02` | 済み（2026-11-19 マージ） |
 
 先行試作は `../../lifting-lug-pose` の `9265d2d`。**試作のリポジトリは読むだけで、書き換えない。**
 
@@ -686,7 +686,7 @@ scripts/ss.sh stop                 # 0。コンテナが残らない
 
 ## `WP-TEST-03` 撮影の記録
 
-**状態: 2026-11-19 着手。**
+**状態: 2026-11-19 マージ済み。**
 
 **読む節**: [-tester.md](DetailedDesign-tester.md) §7・§7a、`ss_locator/locator_node.py`（`_frame_events`・`_camera_parameters`・パラメータの宣言と読み込み）、`tests/test_locator_node.py`・`tests/test_ss_script.py`（書き方の手本）。
 
