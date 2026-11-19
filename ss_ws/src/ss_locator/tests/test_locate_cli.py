@@ -18,6 +18,7 @@ from rclpy.parameter import Parameter
 from rclpy.qos import DurabilityPolicy, QoSProfile, ReliabilityPolicy
 
 from ss_locator import locator_node
+from ss_locator.fakes import FakeLift
 from ss_locator.locate_cli import InterruptFlag, run_cli
 from ss_locator.locator_node import LocatorNode
 from ss_msgs.msg import CleanupDone
@@ -67,12 +68,43 @@ class SilentCleanupNode(LocatorNode):
         self._cleanup_pub = _NoCleanupPublisher()
 
 
+class HeldLift:
+    """試験が放すまで着かない偽の昇降機（`test_cli_busy` の手本）。"""
+
+    def __init__(self, release):
+        self._release = release
+        self._inner = FakeLift()
+
+    def apply(self, command):
+        self._inner.apply(command)
+
+    def advance(self, dt_s):
+        if not self._release.is_set():
+            return self._inner.state()
+        return self._inner.advance(dt_s)
+
+    def state(self):
+        return self._inner.state()
+
+    def take_over(self):
+        self._inner.take_over()
+
+
+class HeldLiftNode(LocatorNode):
+    """昇降機を差し替えたノード（試験が放すまで最初の依頼が IDLE に戻らない）。"""
+
+    def __init__(self, release, **kwargs):
+        super().__init__(**kwargs)
+        self._lift = HeldLift(release)
+        self._last_lift = self._lift.advance(0.0)
+
+
 class ServerRig:
-    def __init__(self, node_class=LocatorNode, **overrides):
+    def __init__(self, node_class=LocatorNode, node_kwargs=None, **overrides):
         values = dict(BASE_PARAMETERS)
         values.update(overrides)
         params = [Parameter(k, value=v) for k, v in values.items()]
-        self.node = node_class(parameter_overrides=params)
+        self.node = node_class(**(node_kwargs or {}), parameter_overrides=params)
         self.helper = rclpy.create_node("locate_cli_test_helper")
         self.executor = MultiThreadedExecutor(num_threads=4)
         self.executor.add_node(self.node)
@@ -262,7 +294,10 @@ def test_cli_no_server():
     assert not any("受け付けました" in l for l in lines)
 
 
-def test_cli_busy(rig):
+def test_cli_busy():
+    # 試験が放すまで最初の依頼を IDLE に戻さない（時間を長くするだけでは揺れが残る）
+    release = threading.Event()
+    rig = ServerRig(node_class=HeldLiftNode, node_kwargs={"release": release})
     first = {}
 
     def first_run():
@@ -271,15 +306,25 @@ def test_cli_busy(rig):
     thread = threading.Thread(target=first_run)
     thread.start()
     try:
+        # 最初の依頼が受け付けられただけでなく、状態が RUNNING になるまで待つ
+        # （受け付け直後は2つ目の依頼が古い IDLE の状態を読むことがある）
         end = time.monotonic() + 10.0
-        while rig.idle() and time.monotonic() < end:
-            time.sleep(0.02)
+        while time.monotonic() < end:
+            _code, status_lines = run(["--status"])
+            if any("phase=RUNNING" in line for line in status_lines):
+                break
+            time.sleep(0.05)
+        else:
+            raise AssertionError("最初の依頼が RUNNING にならない")
         assert not rig.idle()
         code, lines = run(["--yes"])
         assert code == 4
         assert any("別の依頼" in l for l in lines)
+        assert not rig.idle()
     finally:
+        release.set()
         thread.join(timeout=60.0)
+        rig.close()
     assert first["code"] == 0
 
 
