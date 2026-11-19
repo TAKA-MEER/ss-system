@@ -129,3 +129,4 @@ fk-system から写した（元は th-system・hve-system で踏んだものの�
 - **`orca worktree create` は `origin/main` から切る。**push していないコミットが入らないので、作ったらすぐ `git -C <worktree> reset --hard main` で合わせる（作業前なので失うものは無い。2026-11-05）。
 - **Git Bash から `docker run -v` を打つときは `MSYS_NO_PATHCONV=1` を付け、`$PWD` ではなく `$(pwd -W)` を渡す**（パスが変換されて壊れる）。PowerShell なら `${PWD}` のままでよい。
 - Windows から Docker に bind mount した `ss_ws` では colcon が clock skew の警告を出し、型定義を戻した後も古い生成物を使うことがある。必要なら `ss_ws/build/ss_msgs` と `ss_ws/install/ss_msgs` を消して再ビルドする。
+- **コンテナ（`--network host`）の中からは `hve-lift.local`（mDNS）が引けない。ホストからは引ける**（2026-11-19）。`ss.sh start` には `--lift-host <IP>` を渡す。渡し忘れると依頼が昇降機を動かさずに `lift_refused` で返る（高さを一度も受け取れていない）。
