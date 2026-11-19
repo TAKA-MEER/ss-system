@@ -60,3 +60,7 @@ locator_node:
     camera_cmd_period_ms: 100
     camera_state_timeout_ms: 600
     snapshot_min_interval_ms: 200
+
+    # 撮影の記録（試験用。空なら残さない。静止画は実物の写真なので、残してよい現場でだけ true）
+    shot_log_dir: ""
+    shot_save_images: false
