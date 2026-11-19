@@ -27,7 +27,7 @@
 | `WP-LOC-04` | 口の版 3（`depth_measured`） | `WP-EST-04` | 済み（2026-11-18 マージ） |
 | `WP-CAL-02` | カメラの取り付け（光軸に沿った距離・角度のずれ）と校正の道具 | `WP-CAL-01` | 済み（2026-11-18 マージ） |
 | `WP-CAL-03` | 校正の道具で外れた検出を捨てる | `WP-CAL-02` | 済み（2026-11-18 マージ） |
-| `WP-TEST-02` | ホストから起こすスクリプト（`scripts/ss.sh`）と `test_cli_busy` の揺れの直し | `WP-TEST-01`・`WP-CAL-03` | できる |
+| `WP-TEST-02` | ホストから起こすスクリプト（`scripts/ss.sh`）と `test_cli_busy` の揺れの直し | `WP-TEST-01`・`WP-CAL-03` | 済み（2026-11-19 マージ） |
 
 先行試作は `../../lifting-lug-pose` の `9265d2d`。**試作のリポジトリは読むだけで、書き換えない。**
 
@@ -635,7 +635,7 @@ docker run --rm -v "$PWD":/ws ss-system:dev bash scripts/test.sh          # 0 �
 
 ## `WP-TEST-02` ホストから起こすスクリプト
 
-**状態: 2026-11-19 案。着手できる。**
+**状態: 2026-11-19 マージ済み。**
 
 **読む節**: [-tester.md](DetailedDesign-tester.md) §2・§3・§7、[-names.md](DetailedDesign-names.md) §8・§11、`scripts/demo.sh`（書き方の手本）・`tests/test_demo_script.py`。
 
