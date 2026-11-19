@@ -25,6 +25,7 @@ playwright-report/
 # 実行時に機器・手元で作られるもの
 *.log
 .env
+out/
 
 # エディタ / OS
 *.swp
