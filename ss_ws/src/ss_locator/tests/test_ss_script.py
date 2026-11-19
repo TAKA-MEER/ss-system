@@ -22,6 +22,13 @@ FAKE_DOCKER = """#!/usr/bin/env bash
 set -u
 printf '%s ' "$@" >> "$SS_FAKE_DOCKER_LOG"
 printf '\\n' >> "$SS_FAKE_DOCKER_LOG"
+running_value() {
+  if [ -f "$SS_FAKE_STATE_FILE" ]; then
+    cat "$SS_FAKE_STATE_FILE"
+  else
+    printf '%s' "${SS_FAKE_RUNNING:-0}"
+  fi
+}
 cmd="${1:-}"
 case "$cmd" in
   ps)
@@ -32,7 +39,7 @@ case "$cmd" in
     if [ "$has_all" = "1" ]; then
       if [ "${SS_FAKE_EXISTS:-0}" = "1" ]; then echo fake-container-id; fi
     else
-      if [ "${SS_FAKE_RUNNING:-0}" = "1" ]; then echo fake-container-id; fi
+      if [ "$(running_value)" = "1" ]; then echo fake-container-id; fi
     fi
     exit 0
     ;;
@@ -60,13 +67,28 @@ case "$cmd" in
     exit "${SS_FAKE_EXEC_CODE:-0}"
     ;;
   run)
+    has_d=0
+    for a in "$@"; do
+      if [ "$a" = "-d" ]; then has_d=1; fi
+    done
+    if [ "$has_d" = "1" ]; then
+      if [ "${SS_FAKE_DIE_AFTER_RUN:-0}" = "1" ]; then
+        printf '0' > "$SS_FAKE_STATE_FILE"
+      else
+        printf '1' > "$SS_FAKE_STATE_FILE"
+      fi
+    fi
     exit "${SS_FAKE_RUN_CODE:-0}"
     ;;
   logs)
     printf '%s\\n' "fake-log-line"
     exit 0
     ;;
-  build|stop|rm)
+  stop)
+    printf '0' > "$SS_FAKE_STATE_FILE"
+    exit 0
+    ;;
+  build|rm)
     exit 0
     ;;
   *)
@@ -92,6 +114,7 @@ def _env(tmp_path: Path, **overrides):
     env["SS_DOCKER"] = str(_fake_docker(tmp_path))
     env["SS_FAKE_DOCKER_LOG"] = str(tmp_path / "docker.log")
     env["SS_FAKE_STATUS_COUNT_FILE"] = str(tmp_path / "status.count")
+    env["SS_FAKE_STATE_FILE"] = str(tmp_path / "state")
     env["SS_MODEL_PATH"] = str(model)
     env["SS_START_WAIT_S"] = "5"
     env["SS_FAKE_RUNNING"] = "0"
@@ -116,6 +139,9 @@ def _run(tmp_path, args, cwd=None, **overrides):
     count = tmp_path / "status.count"
     if count.exists():
         count.unlink()
+    state = tmp_path / "state"
+    if state.exists():
+        state.unlink()
     result = subprocess.run(
         [str(SCRIPT), *args],
         cwd=str(cwd or tmp_path),
@@ -152,6 +178,10 @@ def test_start_runs_node_with_params_file(tmp_path) -> None:
     assert "--ipc host" in run
     assert f"{REPO_ROOT}:/ws" in run
     assert "locator_node" in run
+    assert "locator_node --ros-args --params-file" in run
+    ros_at = run.index("--ros-args")
+    params_at = run.index("--params-file")
+    assert ros_at < params_at
     assert "--params-file ss_ws/src/ss_locator/config/locator.yaml" in run
     assert "--rm" not in run
 
@@ -163,10 +193,16 @@ def test_start_overrides(tmp_path) -> None:
     )
     assert result.returncode == 0, result.stderr
     run = _find(lines, "run", "ss-system:dev")
+    ros_at = run.index("--ros-args")
     params_at = run.index("--params-file")
-    assert params_at < run.index("camera_host:=192.168.5.129")
-    assert params_at < run.index("lift_host:=10.0.0.2")
-    assert params_at < run.index("use_fakes:=true")
+    assert ros_at < params_at
+    for override in (
+        "camera_host:=192.168.5.129",
+        "lift_host:=10.0.0.2",
+        "use_fakes:=true",
+    ):
+        assert params_at < run.index(override)
+        assert ros_at < run.index(override)
 
     result, lines = _run(tmp_path, ["start"])
     assert result.returncode == 0, result.stderr
@@ -217,6 +253,24 @@ def test_start_waits_for_status(tmp_path) -> None:
     assert result.returncode == 1
     assert _has(lines, "logs", "--tail 50")
     assert "fake-log-line" in result.stdout
+
+
+def test_start_exits_early_when_container_dies(tmp_path) -> None:
+    import time
+
+    started = time.monotonic()
+    result, lines = _run(
+        tmp_path,
+        ["start"],
+        SS_FAKE_STATUS_FAIL_TIMES="99",
+        SS_FAKE_DIE_AFTER_RUN="1",
+        SS_START_WAIT_S="30",
+    )
+    elapsed = time.monotonic() - started
+    assert result.returncode == 1
+    assert elapsed < 10.0
+    assert "コンテナが落ちました" in result.stderr
+    assert _has(lines, "logs", "--tail 50")
 
 
 def test_start_builds_image_when_missing(tmp_path) -> None:
