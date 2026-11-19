@@ -103,7 +103,7 @@ cmd_start() {
     overrides+=(-p "use_fakes:=true")
   fi
   # overrides は --params-file より後ろに付ける（引数の上書きが勝つため）
-  local inner=". /opt/ros/humble/setup.bash && cd /ws/ss_ws && colcon build && . install/setup.bash && cd /ws && exec ros2 run ss_locator locator_node --params-file ss_ws/src/ss_locator/config/locator.yaml"
+  local inner=". /opt/ros/humble/setup.bash && cd /ws/ss_ws && colcon build && . install/setup.bash && cd /ws && exec ros2 run ss_locator locator_node --ros-args --params-file ss_ws/src/ss_locator/config/locator.yaml"
   if [ "${#overrides[@]}" -gt 0 ]; then
     inner="$inner ${overrides[*]}"
   fi
@@ -123,6 +123,12 @@ cmd_start() {
     if [ "$status_code" -eq 0 ]; then
       printf '%s\n' "$status_output"
       exit 0
+    fi
+    # コンテナが落ちていたら上限まで待たない
+    if ! container_running; then
+      echo "コンテナが落ちました" >&2
+      "$SS_DOCKER" logs --tail 50 "$container_name" || true
+      exit 1
     fi
     if [ "$SECONDS" -ge "$deadline" ]; then
       echo "状態が読めませんでした" >&2
