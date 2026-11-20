@@ -79,6 +79,7 @@ class HveCamera:
         snapshot_min_interval_ms=200,
         image_timeout_s=5.0,
         fw=None,
+        link_grace_ms=0,
     ):
         self._host = str(host or "").strip()
         self._lift = lift  # `modules()` を持つもの（`HveLift`）。`host` が空のときだけ使う
@@ -86,6 +87,7 @@ class HveCamera:
             cmd_period_ms=cmd_period_ms,
             state_timeout_ms=state_timeout_ms,
             fw=fw,
+            link_grace_ms=link_grace_ms,
         )
         self._cmd_period_s = max(0.001, float(cmd_period_ms) / 1000.0)
         self._retry_s = self._cmd_period_s * 10.0
@@ -221,7 +223,11 @@ class HveCamera:
 
             status, headers, body = self._fetch(host, min(_REQUEST_TIMEOUT_S, remaining))
             if status is None:
-                return "fail", None
+                # 繋がらない（無線の途切れなど）。期限までは少し待って撮り直す
+                if time.monotonic() + 0.3 >= deadline:
+                    return "fail", None
+                time.sleep(0.3)
+                continue
             verdict = frame_verdict(status, headers, boot, None)
             if verdict == "use":
                 return self._decode(headers, body)

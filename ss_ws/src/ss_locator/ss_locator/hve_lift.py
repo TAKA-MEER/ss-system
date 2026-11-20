@@ -42,7 +42,8 @@ def speeds_from_settings(body):
 class HveLift:
     """hve-system の昇降部（`/ws/module`）につなぐ。"""
 
-    def __init__(self, host, cmd_period_ms=100, state_timeout_ms=600, fw=None):
+    def __init__(self, host, cmd_period_ms=100, state_timeout_ms=600, fw=None,
+                 link_grace_ms=0):
         self._host = str(host)
         self._url = "ws://" + self._host + LIFT_WS_MODULE_PATH
         self._settings_url = "http://" + self._host + LIFT_SETTINGS_PATH
@@ -50,6 +51,7 @@ class HveLift:
             cmd_period_ms=cmd_period_ms,
             state_timeout_ms=state_timeout_ms,
             fw=fw,
+            link_grace_ms=link_grace_ms,
         )
         self._cmd_period_s = max(0.001, float(cmd_period_ms) / 1000.0)
         self._retry_s = self._cmd_period_s * 10.0

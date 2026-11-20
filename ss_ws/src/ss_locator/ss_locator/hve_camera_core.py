@@ -49,10 +49,15 @@ def _wrap_yaw_deg(deg):
 class CameraLink:
     """送る文と今の `CameraState` を決める。WebSocket は持たない。"""
 
-    def __init__(self, cmd_period_ms=100, state_timeout_ms=600, fw=None):
+    def __init__(self, cmd_period_ms=100, state_timeout_ms=600, fw=None, link_grace_ms=0):
         self._cmd_period_s = max(0.0, float(cmd_period_ms) / 1000.0)
         self._state_timeout_s = max(0.0, float(state_timeout_ms) / 1000.0)
         self._fw = fw
+        # 通信が途切れても、この時間までは命令をやめずに繋ぎ直して出し直す（0 なら今までどおり）
+        self._grace_s = max(0.0, float(link_grace_ms) / 1000.0)
+        self._good_at = None  # 最後に `state` を受けた時刻（命令の始めも含む）
+        self._retries = 0
+        self._repress_at = None
 
         self._connected = False
         self._last_state = None
@@ -75,13 +80,16 @@ class CameraLink:
         self._last_state = None
         self._last_state_at = float(now)
         self._queue.insert(0, camera_hello_message(self._fw))
+        if self._grace_s > 0.0 and self._command is not None and not self._stopped():
+            # 繋ぎ直した。前の `press` の `aim` は持ち主が外れて終わっているので、新しい番号で出し直す
+            self._repress()
 
     def on_closed(self, now):
         """切れた。命令の途中なら、その命令をやめる（`failed`）。"""
         self._connected = False
         self._last_state = None
         self._queue.clear()
-        if self._command is not None and not self._stopped():
+        if self._command is not None and not self._stopped() and not self._in_grace(now):
             self._failed = True
 
     def on_state(self, msg, now):
@@ -90,6 +98,7 @@ class CameraLink:
             return
         self._last_state = msg
         self._last_state_at = float(now)
+        self._good_at = float(now)
         if self._command is not None and self._boot_ref is None:
             self._boot_ref = msg.get("boot_id")
 
@@ -111,6 +120,10 @@ class CameraLink:
                 None if self._last_state is None else self._last_state.get("boot_id")
             )
             self._reset_flags()
+            if self._good_at is None or float(now) - self._good_at > self._grace_s:
+                self._good_at = float(now)
+            self._retries = 0
+            self._repress_at = None
         elif isinstance(command, CameraRelease):
             if self._command is None:
                 return
@@ -187,6 +200,19 @@ class CameraLink:
         self._failed = False
         self._pose_lost = False
 
+    def _in_grace(self, now):
+        return (
+            self._grace_s > 0.0
+            and self._good_at is not None
+            and float(now) - self._good_at <= self._grace_s
+        )
+
+    def _repress(self):
+        self._press += 1
+        self._command["press"] = self._press
+        self._last_aim_at = None
+        self._arrived = False
+
     def _stopped(self):
         return self._taken_over or self._failed or self._pose_lost
 
@@ -214,7 +240,7 @@ class CameraLink:
             return
         # 3（後半）: 繋がっていない・`state` が古い
         if not self._connected or self._is_stale(now):
-            if not self._pose_lost:
+            if not self._pose_lost and not self._in_grace(now):
                 self._failed = True
             return
 
@@ -257,6 +283,13 @@ class CameraLink:
         if status == "ARRIVED":
             self._arrived = True
         elif status == "NOT_ARRIVED":
+            if self._grace_s > 0.0 and self._retries < 10 and self._in_grace(now):
+                # 途切れで持ち主が外れた・指令が途絶えたなど。少し待って新しい番号で出し直す
+                if self._repress_at is None or now - self._repress_at >= 0.5:
+                    self._retries += 1
+                    self._repress()
+                    self._repress_at = now
+                return
             self._failed = True  # 3
 
 

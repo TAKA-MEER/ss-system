@@ -371,6 +371,11 @@ class LocateCore:
 
     def _on_frame(self, event, now):
         if not event.ok:
+            # 通信の途切れなどで 1 枚撮れなかった。同じ向きで 2 回まで撮り直す
+            retries = getattr(self, "_frame_retries", 0)
+            if self._awaiting_frame and retries < 2:
+                self._frame_retries = retries + 1
+                return self._point_current(now)
             return self._finish("no_image", now)
         if not self._awaiting_frame:
             return []
@@ -380,6 +385,7 @@ class LocateCore:
         self._awaiting_frame = False
         self._phase = None
         self._scan_index += 1
+        self._frame_retries = 0
 
         if self._scan_index >= len(self._yaws):
             self.stage = self.ESTIMATING

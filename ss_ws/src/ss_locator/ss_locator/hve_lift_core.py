@@ -40,10 +40,15 @@ def hello_message(fw=None):
 class LiftLink:
     """送る文と今の `LiftState` を決める。WebSocket は持たない。"""
 
-    def __init__(self, cmd_period_ms=100, state_timeout_ms=600, fw=None):
+    def __init__(self, cmd_period_ms=100, state_timeout_ms=600, fw=None, link_grace_ms=0):
         self._cmd_period_s = max(0.0, float(cmd_period_ms) / 1000.0)
         self._state_timeout_s = max(0.0, float(state_timeout_ms) / 1000.0)
         self._fw = fw
+        # 通信が途切れても、この時間までは命令をやめずに繋ぎ直して出し直す（0 なら今までどおり）
+        self._grace_s = max(0.0, float(link_grace_ms) / 1000.0)
+        self._good_at = None
+        self._grace_retries = 0
+        self._repress_at = None
 
         self._speeds = None  # (上昇, 下降) [mm/s]。取れていなければ None
         self._connected = False
@@ -71,13 +76,24 @@ class LiftLink:
         self._last_state = None
         self._last_state_at = float(now)
         self._queue.insert(0, hello_message(self._fw))
+        if (
+            self._grace_s > 0.0
+            and self._command is not None
+            and self._stopped_reason == "none"
+            and not self._arrived
+        ):
+            self._repress()
 
     def on_closed(self, now):
         """切れた。命令の途中なら、その命令をやめる（`refused`）。"""
         self._connected = False
         self._last_state = None
         self._queue.clear()
-        if self._command is not None and self._stopped_reason == "none":
+        if (
+            self._command is not None
+            and self._stopped_reason == "none"
+            and not self._in_grace(now)
+        ):
             self._stopped_reason = "refused"
 
     def on_state(self, msg, now):
@@ -86,11 +102,14 @@ class LiftLink:
             return
         self._last_state = msg
         self._last_state_at = float(now)
+        self._good_at = float(now)
 
     def on_command(self, command, now):
         """`locate_core` の命令を受ける。"""
         now = float(now)
         if isinstance(command, LiftGoto):
+            self._grace_retries = 0
+            self._repress_at = None
             self._press += 1
             target_mm = int(round(float(command.height_m) * 1000.0))
             current_mm = self._known_height_mm(now)
@@ -171,6 +190,18 @@ class LiftLink:
         )
 
     # ------------------------------------------------------------------ 中身
+    def _in_grace(self, now):
+        return (
+            self._grace_s > 0.0
+            and self._good_at is not None
+            and float(now) - self._good_at <= self._grace_s
+        )
+
+    def _repress(self):
+        self._press += 1
+        self._command["press"] = self._press
+        self._last_goto_at = None
+
     def _is_stale(self, now):
         return (
             self._last_state_at is None
@@ -196,7 +227,8 @@ class LiftLink:
             return
         # 7: 繋がっていない・`state` が古い
         if not self._connected or self._is_stale(now):
-            self._stopped_reason = "refused"
+            if not self._in_grace(now):
+                self._stopped_reason = "refused"
             return
 
         state = self._last_state
@@ -242,6 +274,17 @@ class LiftLink:
         descending = self._command["descending"]
         if not descending and reason in _CEILING_REASONS:
             self._stopped_reason = "ceiling"  # 4
+        elif (
+            reason in ("CEILING_STALE", "CMD_TIMEOUT", "OWNER_GONE")
+            and self._grace_s > 0.0
+            and self._grace_retries < 20
+            and self._in_grace(now)
+        ):
+            # 途切れで天井の値が古い・指令が途絶えた・持ち主が外れた。少し待って新しい番号で出し直す
+            if self._repress_at is None or now - self._repress_at >= 0.5:
+                self._grace_retries += 1
+                self._repress()
+                self._repress_at = now
         elif not descending and reason == "CEILING_STALE":
             self._stopped_reason = "ceiling_unknown"  # 4a
         elif descending and reason == "BOTTOM":

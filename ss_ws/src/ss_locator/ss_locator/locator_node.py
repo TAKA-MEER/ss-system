@@ -110,6 +110,7 @@ class LocatorNode(Node):
                 self.lift_host,
                 cmd_period_ms=self.lift_cmd_period_ms,
                 state_timeout_ms=self.lift_state_timeout_ms,
+                link_grace_ms=self.link_grace_ms,
             )
             if (self.hve_lift or not self.use_fakes)
             else FakeLift()
@@ -124,8 +125,10 @@ class LocatorNode(Node):
                 state_timeout_ms=self.camera_state_timeout_ms,
                 snapshot_min_interval_ms=self.snapshot_min_interval_ms,
                 image_timeout_s=self.image_timeout_s,
+                link_grace_ms=self.link_grace_ms,
             )
         self._last_lift = self._lift.advance(0.0)
+        self._last_height_m = self._last_lift.height_m
 
         self._events = []
         self._results = {}
@@ -228,6 +231,7 @@ class LocatorNode(Node):
         self.declare_parameter("camera_state_timeout_ms", 600)
         self.declare_parameter("snapshot_min_interval_ms", 200)
 
+        self.declare_parameter("link_grace_ms", 0)
         self.declare_parameter("shot_log_dir", "")
         self.declare_parameter("shot_save_images", False)
 
@@ -291,6 +295,7 @@ class LocatorNode(Node):
         self.camera_state_timeout_ms = int(value("camera_state_timeout_ms"))
         self.snapshot_min_interval_ms = int(value("snapshot_min_interval_ms"))
 
+        self.link_grace_ms = int(value("link_grace_ms"))
         self.shot_log_dir = str(value("shot_log_dir"))
         self.shot_save_images = bool(value("shot_save_images"))
 
@@ -385,6 +390,8 @@ class LocatorNode(Node):
             self._last_tick = now
             if self._lift is not None:
                 self._last_lift = self._lift.advance(dt)
+                if self._last_lift.height_m is not None:
+                    self._last_height_m = float(self._last_lift.height_m)
                 self._events.append(self._last_lift)
             else:
                 self._events.append(Tick())
@@ -453,8 +460,8 @@ class LocatorNode(Node):
             view = captured["view"]
             keypoints, confidences = self._detector.detect(view)
         else:
-            lift = self._last_lift
-            if lift is None or lift.height_m is None:
+            # 昇降部との通信が一瞬途切れても、最後に読めた高さを使う（走査中は昇降機は止まっている）
+            if self._last_height_m is None:
                 return [FrameDone(float(captured["yaw_rad"]), [], False)]
             self._frame_count += 1
             view = self._frame_count
@@ -480,7 +487,7 @@ class LocatorNode(Node):
             if self.use_fakes:
                 lift_height = camera_height = pitch = image = None
             else:
-                lift_height = float(self._last_lift.height_m)
+                lift_height = float(self._last_height_m)
                 camera_height = lift_height + self.camera_height_offset_m
                 pitch = float(captured["pitch_down_rad"])
                 image = captured["image"] if self.shot_save_images else None
@@ -520,8 +527,7 @@ class LocatorNode(Node):
         if self.use_fakes:
             return captured["K"], captured["dist"], captured["T"]
 
-        lift = self._last_lift
-        height = float(lift.height_m) + self.camera_height_offset_m
+        height = float(self._last_height_m) + self.camera_height_offset_m
         T = geometry.camera_T(
             height,
             float(captured["yaw_rad"]),
