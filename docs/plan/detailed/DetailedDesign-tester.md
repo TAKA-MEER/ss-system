@@ -136,6 +136,8 @@
 | `ss.sh start` | `--record` で `-p shot_log_dir:=out/shots-<YYYYmmdd-HHMMSS>` を足し、そのフォルダ名を出す。`--save-images` は `--record` も兼ね、さらに `-p shot_save_images:=true` を足す |
 | `ss.sh stop` | コンテナを止めたあと、`out/` があれば持ち主を直す（`chown`。`locate` と同じ） |
 
+**`--param <名前>:=<値>`**（2026-11-25 ユーザー承認。fk の求め。`WP-TEST-04`）: `ss.sh start` に、任意のノードのパラメータの上書きを足す。繰り返し指定でき、`-p <名前>:=<値>` として `--params-file` より後ろ、ほかの上書き（`--camera-host` など）より後ろに、指定した順で付く。名前は英数字と `_` だけ（`[A-Za-z_][A-Za-z0-9_]*`）。`:=` が無い・名前が違う形なら、何も起こさずに 1 で終わる。値はコンテナの中のシェルで解釈されないよう引用する（空白や `;` を含んでも 1 つの値として渡る）。使い道: hve のピッチの改修までの `scan_view_down_max_deg`（実機 58・fk の sim 63）。
+
 ## 8. この案で決めないもの
 
 | もの | どこで |

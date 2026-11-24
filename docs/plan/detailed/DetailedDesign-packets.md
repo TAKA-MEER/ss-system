@@ -30,6 +30,7 @@
 | `WP-TEST-02` | ホストから起こすスクリプト（`scripts/ss.sh`）と `test_cli_busy` の揺れの直し | `WP-TEST-01`・`WP-CAL-03` | 済み（2026-11-19 マージ） |
 | `WP-TEST-03` | 撮影の記録（1 枚ごとの向き・高さ・検出、求めたときだけ静止画） | `WP-TEST-02` | 済み（2026-11-19 マージ） |
 | `WP-SCAN-01` | 走査でピッチも段に振る | `WP-TEST-03` | 済み（2026-11-25 マージ） |
+| `WP-TEST-04` | `ss.sh start` に任意のパラメータの上書き（`--param`） | `WP-TEST-02` | できる（2026-11-25） |
 
 先行試作は `../../lifting-lug-pose` の `9265d2d`。**試作のリポジトリは読むだけで、書き換えない。**
 
@@ -755,3 +756,34 @@ docker run --rm -v "$PWD":/ws ss-system:dev bash scripts/test.sh   # 0 で終わ
 | `test_node_passes_vfov` | ノードが `camera_K` の fy から `vfov_rad` を求めて依頼の流れに渡し、`scan_view_down_max_deg` を読む（手本は `test_locator_node.py` のパラメータの試験） |
 
 **変異チェック（実装管理担当が自分で回す）**: (1) 段の向きに設定の `scan_pitch_down_deg` を使い続ける（全段が 20°）、(2) 蛇行をやめる／深い段から撮る、(3) 撮り直しで段の番号を 0 に戻す、(4) 見た範囲に途中の段のヨーを数える、(5) ノードで `vfov_rad` を渡さない、(6) 金具を床へ戻すピッチを設定の値にする、のそれぞれで試験が落ちること。
+
+## `WP-TEST-04` `ss.sh start` に任意のパラメータの上書き
+
+**状態: 2026-11-25 案。**fk-system の求め（fk の sim は ss を `ss.sh start` で起こすので、`scan_view_down_max_deg` を渡せない）。ユーザー承認。
+
+**読む節**: [-tester.md](DetailedDesign-tester.md) §7（末尾の `--param`）・§7a、`scripts/ss.sh`（`start` の引数の読み取りと `overrides`・`inner`）、`tests/test_ss_script.py`（`test_start_overrides`・`test_start_record` が手本）。
+
+| やること | 中身 |
+| --- | --- |
+| スクリプト | `scripts/ss.sh` の `start` に `--param <名前>:=<値>`（と `--param=<名前>:=<値>`）を足す。-tester.md §7 のとおり: 繰り返し可・ほかの上書きの後ろに指定順・名前の形を確かめて違えば何も起こさず 1・値はコンテナの中のシェルで解釈されないよう引用（`printf %q` など）。`usage` も直す |
+| 文書 | `docs/使い方.md` の `start` の表に `--param` を足す。WP-SCAN-01 で書いた「hve のピッチが届くまで 2 段にする」手順を、`locator.yaml` を書き写す方法から `--param scan_view_down_max_deg:=58.0` に改める |
+| 変えないもの | ノード・設定・`locate_cli.py`・ほかのサブコマンド |
+
+**受け入れ条件**:
+
+```bash
+docker run --rm -e ROS_DOMAIN_ID=77 -v "$PWD":/ws ss-system:dev bash scripts/test.sh   # 0 で終わる
+bash -n scripts/ss.sh
+# 実装管理担当がホストで（本物の docker）:
+scripts/ss.sh start --fakes --param scan_view_down_max_deg:=63.0   # 状態の 1 行
+docker exec ss-system bash -c '. /opt/ros/humble/setup.bash && ros2 param get /locator_node scan_view_down_max_deg'   # 63.0
+scripts/ss.sh stop
+```
+
+| 試験 | 確かめること |
+| --- | --- |
+| `test_start_param` | `--param scan_view_down_max_deg:=63.0` で `-p scan_view_down_max_deg:=63.0` が `--params-file` より後ろ、`--camera-host` などの上書きより後ろに付く。2 つ指定すると指定順に 2 つ付く。`--param=名前:=値` の形も同じ |
+| `test_start_param_bad` | `:=` が無い・名前に `-` や空白がある・値が無い（`--param` が最後）とき、1 で終わり docker を起こさない |
+| `test_start_param_quoted` | 値に空白と `;` を含めても（例 `x:=a; touch /tmp/p`）、コンテナの中のシェルで 1 つの値として渡り、別のコマンドとして走らない（偽の docker が受けた `bash -c` の文字列を `bash` で語に分けて確かめる） |
+
+**変異チェック（実装管理担当が自分で回す）**: (1) `--param` を `overrides` に足さない、(2) `--params-file` より前に付ける、(3) 値を引用しない、(4) 名前の形を確かめない、のそれぞれで試験が落ちること。
