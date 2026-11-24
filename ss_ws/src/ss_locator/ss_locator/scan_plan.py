@@ -18,6 +18,42 @@ def hfov_from_fx(fx, width_px=1280):
     return 2.0 * math.atan(width_px / 2.0 / fx)
 
 
+def vfov_from_fy(fy, height_px=720):
+    """縦の画角。`fy` は画素単位の焦点距離。"""
+    return 2.0 * math.atan(height_px / 2.0 / fy)
+
+
+def plan_pitches(pitch_top_rad, view_down_max_rad, vfov_rad, overlap_ratio):
+    """撮るピッチ（段）の一覧（浅い順）。
+
+    一番浅い段は `pitch_top_rad`、一番深い段はその下端が `view_down_max_rad` に
+    届く中心。そのあいだを画角が少し重なる刻みで等間隔に埋める。
+    `vfov_rad <= 0` のときは 1 段だけ。
+    """
+    top = float(pitch_top_rad)
+    vfov = float(vfov_rad)
+    if vfov <= 0.0:
+        return [top]
+    deepest = float(view_down_max_rad) - vfov / 2.0
+    if deepest <= top:
+        return [top]
+    step = vfov * (1.0 - float(overlap_ratio))
+    if step <= 0.0:
+        return [top, deepest]
+    n = max(2, int(math.ceil((deepest - top) / step)) + 1)
+    return [top + (deepest - top) * i / (n - 1) for i in range(n)]
+
+
+def plan_shots(yaws, pitches):
+    """（ヨー, ピッチ）の一覧。段ごとに撮り、段ごとにヨーの順を逆にする（蛇行）。"""
+    shots = []
+    yaws = list(yaws)
+    for i, pitch in enumerate(pitches):
+        seq = yaws if i % 2 == 0 else list(reversed(yaws))
+        shots.extend((yaw, float(pitch)) for yaw in seq)
+    return shots
+
+
 def plan_yaws(azimuth_from_rad, azimuth_span_rad, hfov_rad, overlap_ratio):
     """依頼の範囲を、画角が少し重なる刻みで撮るヨーの一覧（開始から反時計回り）。"""
     span = float(azimuth_span_rad)
