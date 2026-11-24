@@ -45,6 +45,56 @@ def test_hfov_from_fx():
     assert S.hfov_from_fx(640.0, width_px=1280) == pytest.approx(math.pi / 2.0)
 
 
+def test_vfov_from_fy():
+    assert S.vfov_from_fy(360.0) == pytest.approx(math.pi / 2.0)
+    assert S.vfov_from_fy(360.0, height_px=720) == pytest.approx(math.pi / 2.0)
+
+
+def test_plan_pitches_real_camera():
+    # fy 1482.66（実機。WP-CAL-01）・上 20°・下端 70°・重なり 0.1 → 3 段
+    vfov = S.vfov_from_fy(1482.66)
+    got = S.plan_pitches(D(20.0), D(70.0), vfov, 0.1)
+    assert len(got) == 3
+    assert got[0] == pytest.approx(D(20.0))
+    assert got[1] == pytest.approx(D(38.2), abs=D(0.05))
+    assert got[2] == pytest.approx(D(56.35), abs=D(0.05))
+    # 隣の段の縦の画角が重なり、一番深い段の下端がちょうど下端 70°
+    assert got[-1] + vfov / 2.0 == pytest.approx(D(70.0))
+    for a, b in zip(got, got[1:]):
+        assert b - a <= vfov * 0.9 + 1e-9
+
+
+def test_plan_pitches_sim_camera():
+    # fy 1082（合成データ）・上 20°・下端 70°・重なり 0.1 → 2 段
+    vfov = S.vfov_from_fy(1082.0)
+    got = S.plan_pitches(D(20.0), D(70.0), vfov, 0.1)
+    assert len(got) == 2
+    assert got[0] == pytest.approx(D(20.0))
+    assert got[1] == pytest.approx(D(51.6), abs=D(0.05))
+
+
+def test_plan_pitches_single():
+    # vfov 0 → 1 段だけ
+    assert S.plan_pitches(D(20.0), D(70.0), 0.0, 0.1) == [pytest.approx(D(20.0))]
+    # 下端 58°・fy 1482.66 → 2 段（20°・約 44.35°）
+    vfov = S.vfov_from_fy(1482.66)
+    got = S.plan_pitches(D(20.0), D(58.0), vfov, 0.1)
+    assert len(got) == 2
+    assert got[0] == pytest.approx(D(20.0))
+    assert got[1] == pytest.approx(D(44.35), abs=D(0.05))
+    # 下端が浅すぎて一番深い段が上以下 → 1 段
+    assert S.plan_pitches(D(20.0), D(30.0), vfov, 0.1) == [pytest.approx(D(20.0))]
+
+
+def test_plan_shots_serpentine():
+    a, b, c = D(10.0), D(20.0), D(30.0)
+    p1, p2 = D(20.0), D(50.0)
+    got = S.plan_shots([a, b, c], [p1, p2])
+    assert got == [(a, p1), (b, p1), (c, p1), (c, p2), (b, p2), (a, p2)]
+    pitches = [p for _, p in got]
+    assert pitches == sorted(pitches)  # ピッチは単調に深くなる
+
+
 def test_seen_ranges():
     hfov = D(60.0)
 

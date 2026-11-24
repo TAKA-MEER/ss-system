@@ -26,6 +26,8 @@ locator_node:
     scan_camera_height_m: 3.10
     min_camera_height_m: 2.95
     scan_pitch_down_deg: 20.0
+    # 一番深い段の下端（見下ろし）。hve のピッチが届くまで実機では 58.0 に下げる（2 段）。
+    scan_view_down_max_deg: 70.0
     scan_overlap_ratio: 0.1
     settle_s: 0.5
     image_timeout_s: 15.0

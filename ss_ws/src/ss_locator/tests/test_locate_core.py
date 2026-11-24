@@ -304,7 +304,8 @@ def test_core_reason_no_image():
     assert rig.accept(goal()) is None
     rig.start_scan()
     rig.advance(rig.params["settle_s"])
-    rig.finish_cleanup(0.0)
+    # 1 枚失敗しても同じ向きで 2 回まで撮り直す（34cc2c8）ので、時間を進めて尽くす
+    rig.finish_cleanup(1.0)
 
     results = rig.results()
     assert len(results) == 1
@@ -979,3 +980,93 @@ def test_two_lug_in_core():
     assert panel["depth_m"] == pytest.approx(0.86)
     assert panel["depth_measured"] is False
     assert panel["front_known"] is False
+
+
+# ---------------------------------------------------------------- 走査でピッチも段に振る（WP-SCAN-01）
+def _tier_params(**overrides):
+    values = {
+        "vfov_rad": scan_plan.vfov_from_fy(1482.66),
+        "scan_view_down_max_deg": 70.0,
+        "scan_pitch_down_deg": 20.0,
+        "settle_s": 0.1,
+    }
+    values.update(overrides)
+    return make_params(**values)
+
+
+def test_scan_points_every_tier():
+    rig = Rig(params=_tier_params())
+    rig.prime()
+    assert rig.accept(goal(azimuth_span_rad=math.radians(90.0))) is None
+    rig.start_scan()
+    for _ in range(len(rig.core._shots)):
+        rig.advance(rig.params["settle_s"])
+    rig.finish_cleanup(0.0)
+
+    assert len(rig.core._pitches) == 3
+    assert len(rig.core._yaws) == 2
+    assert len(rig.core._shots) == len(rig.core._yaws) * len(rig.core._pitches)
+    degrees = [math.degrees(p) for p in rig.core._pitches]
+    assert degrees[0] == pytest.approx(20.0)
+    assert degrees[1] == pytest.approx(38.2, abs=0.05)
+    assert degrees[2] == pytest.approx(56.35, abs=0.05)
+
+    result_index = rig.commands.index(rig.results()[0])
+    points = [
+        (c.yaw_rad, c.pitch_down_rad)
+        for c in rig.commands[:result_index]
+        if isinstance(c, CameraPoint)
+    ]
+    assert points == scan_plan.plan_shots(rig.core._yaws, rig.core._pitches)
+    # 蛇行: 段の境で同じヨーが 2 枚続く（2 段目はヨーの順が逆）
+    assert points[1][0] == points[2][0]
+    assert points[3][0] == points[0][0] and points[4][0] == points[3][0]
+
+
+def _complete_frame(drive, now):
+    """着く→撮る→`FrameDone(ok=True)` まで進め、次に向けた命令を返す。"""
+    assert has(drive.camera(now, arrived=True), RequestFrame)
+    return drive.step(FrameDone(0.0, [], True), now + 0.1)
+
+
+def test_scan_retry_same_tier():
+    drive = Drive(settle_s=0.0, vfov_rad=scan_plan.vfov_from_fy(1482.66),
+                  scan_view_down_max_deg=70.0)
+    shots = drive.core._shots
+    assert len(drive.core._pitches) == 3
+    now = 2.0
+    # 浅い段を全部撮り終え、深い段の最初の 1 枚まで進む
+    for _ in range(len(drive.core._yaws) + 1):
+        _complete_frame(drive, now)
+        now += 1.0
+    # いま向けているのは深い段の 2 枚目。そこで撮れなければ同じ段・同じヨーへ向け直す
+    current = shots[drive.core._scan_index]
+    assert math.degrees(current[1]) > 20.0
+    assert has(drive.camera(now, arrived=True), RequestFrame)
+    now += 1.0
+    commands = drive.step(FrameDone(0.0, [], False), now)
+    points = [c for c in commands if isinstance(c, CameraPoint)]
+    assert len(points) == 1
+    assert (points[0].yaw_rad, points[0].pitch_down_rad) == current
+    assert (points[0].yaw_rad, points[0].pitch_down_rad) != shots[0]
+
+
+def test_seen_range_needs_all_tiers():
+    drive = Drive(settle_s=0.0, vfov_rad=scan_plan.vfov_from_fy(1482.66),
+                  scan_view_down_max_deg=70.0)
+    now = 2.0
+    # 浅い段を全部と、深い段の最初の 1 枚だけ撮る（どのヨーも全段は撮り終えていない）
+    for _ in range(len(drive.core._yaws) + 1):
+        _complete_frame(drive, now)
+        now += 1.0
+    # 次の深い段の 1 枚で撮り直しが尽きて `no_image`
+    assert has(drive.camera(now, arrived=True), RequestFrame)
+    now += 1.0
+    for _ in range(3):
+        drive.step(FrameDone(0.0, [], False), now)
+        now += 1.0
+    result = drive.result()
+    assert result.reason == "no_image"
+    # 深い段を撮っていないヨーの画角は見たことにならない
+    assert result.seen_from == []
+    assert result.seen_span == []
