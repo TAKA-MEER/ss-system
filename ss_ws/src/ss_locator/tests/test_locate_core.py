@@ -304,7 +304,8 @@ def test_core_reason_no_image():
     assert rig.accept(goal()) is None
     rig.start_scan()
     rig.advance(rig.params["settle_s"])
-    rig.finish_cleanup(0.0)
+    # 1 枚失敗しても同じ向きで 2 回まで撮り直す（34cc2c8）ので、時間を進めて尽くす
+    rig.finish_cleanup(1.0)
 
     results = rig.results()
     assert len(results) == 1
