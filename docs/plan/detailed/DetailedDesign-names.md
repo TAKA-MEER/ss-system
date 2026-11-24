@@ -100,7 +100,8 @@
 | `detect_conf` | — | 0.25 | 試作の評価（`eval_lug.py`。[source/lifting-lug-pose.md](../source/lifting-lug-pose.md) §4） |
 | `scan_camera_height_m` | m | 3.10 | [Spec.md](../spec/Spec.md) §1.2（床から約 2.95〜3.25 m の中央） |
 | `min_camera_height_m` | m | 2.95 | [Spec.md](../spec/Spec.md) §1.2（同じ範囲の下端。届かなければ `camera_too_low`） |
-| `scan_pitch_down_deg` | ° | 20 | **暫定（逆算）**: 5 m 先の金具の見下ろしは約 10°、1 m 先は約 30〜40°。そのあいだが縦の画角に入る向き。実機で決める（`SS-V2`） |
+| `scan_pitch_down_deg` | ° | 20 | **一番浅い段の中心**（2026-11-25 から。[-core.md](DetailedDesign-core.md) §3）。**暫定（逆算）**: 5 m 先の金具の見下ろしは約 8.5°。縦 27.3° なら上端が約 6.4°。実機で決める（`SS-V2`） |
+| `scan_view_down_max_deg` | ° | 70 | **一番深い段の下端**（2026-11-25 ユーザー決定の逆算）: 天板の 0.75 m 上から、機体の中心から水平に約 0.3 m の金具（fk の精度の要求の「手前の金具は 0.3 m ほどまで近い」）は見下ろし約 68°。金具の大きさを見込んで 70°。hve のピッチが届くまで実機の試験では 58° に下げる |
 | `scan_overlap_ratio` | — | 0.1 | **暫定**（[Spec.md](../spec/Spec.md) §1.2「少し重なる」） |
 | `settle_s` | s | 0.5 | **暫定**（向けてから撮るまで待つ。静止画は最大約 0.1 s 前のコマ: 試作 E13） |
 | `image_timeout_s` | s | 5 | **暫定** |

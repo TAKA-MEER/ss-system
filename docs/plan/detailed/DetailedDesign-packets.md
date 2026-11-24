@@ -29,6 +29,7 @@
 | `WP-CAL-03` | 校正の道具で外れた検出を捨てる | `WP-CAL-02` | 済み（2026-11-18 マージ） |
 | `WP-TEST-02` | ホストから起こすスクリプト（`scripts/ss.sh`）と `test_cli_busy` の揺れの直し | `WP-TEST-01`・`WP-CAL-03` | 済み（2026-11-19 マージ） |
 | `WP-TEST-03` | 撮影の記録（1 枚ごとの向き・高さ・検出、求めたときだけ静止画） | `WP-TEST-02` | 済み（2026-11-19 マージ） |
+| `WP-SCAN-01` | 走査でピッチも段に振る | `WP-TEST-03` | できる（2026-11-25） |
 
 先行試作は `../../lifting-lug-pose` の `9265d2d`。**試作のリポジトリは読むだけで、書き換えない。**
 
@@ -720,3 +721,37 @@ scripts/ss.sh stop                     # 0。out/shots-<時刻>/shots.jsonl に�
 | `test_stop_fixes_ownership` | `stop` で `docker stop` のあとに `chown` を呼ぶ |
 
 **変異チェック（実装管理担当が自分で回す）**: (1) `_frame_events` から記録の呼び出しを消す、(2) `shot_save_images` を見ずにいつも静止画を書く、(3) `camera_height_m` に `camera_height_offset_m` を足さない、(4) 書けないときの例外を握らない、(5) `start --record` で `shot_log_dir` を渡さない、のそれぞれで試験が落ちること。
+
+## `WP-SCAN-01` 走査でピッチも段に振る
+
+**状態: 2026-11-25 案。**fk-system の依頼（盤の前で手前の吊り金具が写らず `top_not_found`）。[Spec.md](../spec/Spec.md) §1.2「撮り方」（2026-11-25 ユーザー決定）。
+
+**読む節**: [-core.md](DetailedDesign-core.md) §3（走査の計画。**段の決まりはここが正**）、[-names.md](DetailedDesign-names.md) §5（`scan_pitch_down_deg`・`scan_view_down_max_deg`）、`ss_locator/scan_plan.py`、`ss_locator/locate_core.py`（`_begin_scanning`・`_point_current`・`_on_frame`・`_finish` の `seen_ranges`）、`ss_locator/locator_node.py`（パラメータの宣言・読み込み・`hfov_rad` を渡す所）、`tests/test_scan_plan.py`・`tests/test_locate_core.py`（書き方の手本）。
+
+| やること | 中身 |
+| --- | --- |
+| 純関数 | `scan_plan.py` に `vfov_from_fy(fy, height_px=720)` と `plan_pitches(pitch_top_rad, view_down_max_rad, vfov_rad, overlap_ratio)`（段のピッチの一覧。浅い順）を足す。`vfov_rad <= 0` なら `[pitch_top_rad]` だけ。`plan_shots(yaws, pitches)` は段ごと・蛇行の順の（ヨー, ピッチ）の一覧（-core.md §3「撮る順」） |
+| 依頼の流れ | `locate_core.py` で、撮る一覧を `plan_shots` の結果にする。向ける（`CameraPoint`）のはその（ヨー, ピッチ）。撮り直しは同じ（ヨー, ピッチ）。**見た方向の範囲は、全段を撮り終えたヨーだけで求める**。パラメータ `vfov_rad`（無い・0 なら 1 段で今までと同じ）と `scan_view_down_max_deg`（既定 70） |
+| ノード | `locator_node.py` に `scan_view_down_max_deg`（既定 70.0）を宣言・読み込み、`vfov_rad` を `camera_K` の fy（`[1, 1]`）から求めて `hfov_rad` と同じ所で渡す |
+| 設定 | `config/locator.yaml` に `scan_view_down_max_deg: 70.0` を `scan_pitch_down_deg` の次に足す（説明の 1 行コメント付き） |
+| 文書 | `docs/使い方.md` に、依頼 1 回で撮る枚数が段の数ぶん増えること（実機で 3 段）と、hve のピッチが届くまでは `scan_view_down_max_deg:=58.0` で 2 段にする方法（`ss.sh` で上書きできるならその書き方。できなければその旨）を足す |
+| 変えないもの | 口（`ss_msgs`）・`hve_camera*.py`・`fakes.py`・`assemble.py`・`panels.py`・`mount_calib.py`・金具を床へ戻すピッチ（静止画の応答の値のまま） |
+
+**受け入れ条件**:
+
+```bash
+docker run --rm -v "$PWD":/ws ss-system:dev bash scripts/test.sh   # 0 で終わる（今までの試験も通る）
+```
+
+| 試験 | 確かめること |
+| --- | --- |
+| `test_plan_pitches_real_camera` | fy 1482.66・上 20°・下端 70°・重なり 0.1 → 3 段で 20°・約 38.2°・約 56.35°（±0.05°）。隣の段の縦の画角が重なり、一番深い段の下端がちょうど 70° |
+| `test_plan_pitches_sim_camera` | fy 1082 → 2 段で 20°・約 51.6° |
+| `test_plan_pitches_single` | `vfov_rad` 0 → `[上]` だけ。下端 58°・fy 1482.66 → 2 段（20°・約 44.35°）。下端が浅すぎて一番深い段が上以下 → 1 段 |
+| `test_plan_shots_serpentine` | ヨー `[a, b, c]`・ピッチ `[p1, p2]` → `[(a,p1),(b,p1),(c,p1),(c,p2),(b,p2),(a,p2)]`。ピッチは単調に深くなる |
+| `test_scan_points_every_tier` | 偽の hve で依頼を流すと、出た `CameraPoint`（後片付けの分を除く）が ヨーの枚数 × 段の数 で、（ヨー, ピッチ）の組が `plan_shots` の順と一致する |
+| `test_scan_retry_same_tier` | 深い段で 1 枚撮れなかった（`FrameDone(ok=False)`）とき、次の `CameraPoint` が同じ（ヨー, ピッチ）で、一番浅い段に戻らない |
+| `test_seen_range_needs_all_tiers` | 深い段の途中で `no_image` になったとき、返す見た方向の範囲に、深い段を撮っていないヨーの画角が入らない（全段を撮ったヨーの分だけ） |
+| `test_node_passes_vfov` | ノードが `camera_K` の fy から `vfov_rad` を求めて依頼の流れに渡し、`scan_view_down_max_deg` を読む（手本は `test_locator_node.py` のパラメータの試験） |
+
+**変異チェック（実装管理担当が自分で回す）**: (1) 段の向きに設定の `scan_pitch_down_deg` を使い続ける（全段が 20°）、(2) 蛇行をやめる／深い段から撮る、(3) 撮り直しで段の番号を 0 に戻す、(4) 見た範囲に途中の段のヨーを数える、(5) ノードで `vfov_rad` を渡さない、(6) 金具を床へ戻すピッチを設定の値にする、のそれぞれで試験が落ちること。
