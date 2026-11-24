@@ -30,7 +30,7 @@
 | `WP-TEST-02` | ホストから起こすスクリプト（`scripts/ss.sh`）と `test_cli_busy` の揺れの直し | `WP-TEST-01`・`WP-CAL-03` | 済み（2026-11-19 マージ） |
 | `WP-TEST-03` | 撮影の記録（1 枚ごとの向き・高さ・検出、求めたときだけ静止画） | `WP-TEST-02` | 済み（2026-11-19 マージ） |
 | `WP-SCAN-01` | 走査でピッチも段に振る | `WP-TEST-03` | 済み（2026-11-25 マージ） |
-| `WP-TEST-04` | `ss.sh start` に任意のパラメータの上書き（`--param`） | `WP-TEST-02` | できる（2026-11-25） |
+| `WP-TEST-04` | `ss.sh start` に任意のパラメータの上書き（`--param`） | `WP-TEST-02` | 済み（2026-11-25 マージ） |
 
 先行試作は `../../lifting-lug-pose` の `9265d2d`。**試作のリポジトリは読むだけで、書き換えない。**
 
@@ -759,7 +759,7 @@ docker run --rm -v "$PWD":/ws ss-system:dev bash scripts/test.sh   # 0 で終わ
 
 ## `WP-TEST-04` `ss.sh start` に任意のパラメータの上書き
 
-**状態: 2026-11-25 案。**fk-system の求め（fk の sim は ss を `ss.sh start` で起こすので、`scan_view_down_max_deg` を渡せない）。ユーザー承認。
+**状態: 2026-11-25 マージ済み（`617b572`）。**fk-system の求め（fk の sim は ss を `ss.sh start` で起こすので、`scan_view_down_max_deg` を渡せない）。ユーザー承認。
 
 **読む節**: [-tester.md](DetailedDesign-tester.md) §7（末尾の `--param`）・§7a、`scripts/ss.sh`（`start` の引数の読み取りと `overrides`・`inner`）、`tests/test_ss_script.py`（`test_start_overrides`・`test_start_record` が手本）。
 
