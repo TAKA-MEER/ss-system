@@ -148,6 +148,10 @@ class LocateCore:
 
         self._started = False
         self._yaws = []
+        self._pitches = []
+        self._shots = []
+        self._shots_done = set()
+        self._frame_retries = 0
         self._scan_index = 0
         self._yaws_done = []
         self._obs = []
@@ -178,6 +182,17 @@ class LocateCore:
 
     def _pitch_down_rad(self):
         return math.radians(float(self._get("scan_pitch_down_deg", 20.0)))
+
+    def _vfov_rad(self):
+        return float(self._get("vfov_rad", 0.0))
+
+    def _scan_pitches(self):
+        return scan_plan.plan_pitches(
+            self._pitch_down_rad(),
+            math.radians(float(self._get("scan_view_down_max_deg", 70.0))),
+            self._vfov_rad(),
+            float(self._get("scan_overlap_ratio", 0.1)),
+        )
 
     def _hfov_rad(self):
         return float(self._get("hfov_rad", 0.0))
@@ -226,6 +241,10 @@ class LocateCore:
 
         self._started = False
         self._yaws = []
+        self._pitches = []
+        self._shots = []
+        self._shots_done = set()
+        self._frame_retries = 0
         self._scan_index = 0
         self._yaws_done = []
         self._obs = []
@@ -331,19 +350,33 @@ class LocateCore:
             self._hfov_rad(),
             float(self._get("scan_overlap_ratio", 0.1)),
         )
+        self._pitches = self._scan_pitches()
+        self._shots = scan_plan.plan_shots(self._yaws, self._pitches)
+        self._shots_done = set()
         self._scan_index = 0
-        if not self._yaws:
+        if not self._shots:
             return cmds + self._finish(None, now)
         return cmds + self._point_current(now)
 
     def _point_current(self, now):
-        yaw = self._yaws[self._scan_index]
+        yaw, pitch = self._shots[self._scan_index]
         self._phase = self._SETTLING
         self._aim_started_at = now
         self._settle_deadline = None  # 着いた（`arrived`）のを受けてから数える
         self._frame_requested_at = None
         self._awaiting_frame = False
-        return [CameraPoint(yaw, self._pitch_down_rad())]
+        return [CameraPoint(yaw, pitch)]
+
+    def _seen_yaws(self):
+        """全段を撮り終えたヨーだけ（見た方向の範囲に数えるもの）。"""
+        by_yaw = {}
+        for i, (yaw, _pitch) in enumerate(self._shots):
+            by_yaw.setdefault(yaw, []).append(i)
+        return [
+            yaw
+            for yaw, idxs in by_yaw.items()
+            if all(i in self._shots_done for i in idxs)
+        ]
 
     def _poll_scan(self, event, now):
         if self._phase == self._SETTLING:
@@ -381,13 +414,14 @@ class LocateCore:
             return []
 
         self._obs.extend(event.lugs)
+        self._shots_done.add(self._scan_index)
         self._yaws_done.append(float(event.yaw_rad))
         self._awaiting_frame = False
         self._phase = None
         self._scan_index += 1
         self._frame_retries = 0
 
-        if self._scan_index >= len(self._yaws):
+        if self._scan_index >= len(self._shots):
             self.stage = self.ESTIMATING
             return [SendFeedback(self.ESTIMATING)] + self._finish(None, now)
         return self._point_current(now)
@@ -451,7 +485,7 @@ class LocateCore:
             self._max_distance,
         )
         seen_from, seen_span = scan_plan.seen_ranges(
-            self._yaws_done,
+            self._seen_yaws(),
             self._hfov_rad(),
             self._goal.azimuth_from_rad,
             self._goal.azimuth_span_rad,
