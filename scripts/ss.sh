@@ -17,9 +17,10 @@ usage() {
 使い方: scripts/ss.sh <やること> [引数]
 
 やること:
-  start [--camera-host <IP>] [--lift-host <名前かIP>] [--fakes] [--record] [--save-images]
+  start [--camera-host <IP>] [--lift-host <名前かIP>] [--fakes] [--record] [--save-images] [--param <名前>:=<値>]
       本システムを起こす（--record は撮影の記録を out/shots-<時刻>/ に残す。
-      --save-images は静止画も残す（--record を兼ねる。実物の写真なので残してよい現場でだけ））
+      --save-images は静止画も残す（--record を兼ねる。実物の写真なので残してよい現場でだけ）。
+      --param はノードのパラメータの上書き（繰り返し可））
   status
       状態を1回出す
   locate [locate_cli の引数]
@@ -63,6 +64,7 @@ fix_out_ownership() {
 
 cmd_start() {
   local camera_host="" lift_host="" use_fakes=0 record=0 save_images=0
+  local param_overrides=()
   while [ $# -gt 0 ]; do
     case "$1" in
       --camera-host)
@@ -76,6 +78,38 @@ cmd_start() {
       --fakes) use_fakes=1; shift ;;
       --record) record=1; shift ;;
       --save-images) record=1; save_images=1; shift ;;
+      --param)
+        if [ $# -lt 2 ]; then
+          echo "--param には <名前>:=<値> が要ります" >&2
+          exit 1
+        fi
+        param_spec="$2"; shift 2
+        case "$param_spec" in
+          *":="*) ;;
+          *)
+            echo "--param の形が違います: $param_spec (<名前>:=<値> で指定してください)" >&2
+            exit 1 ;;
+        esac
+        param_name="${param_spec%%:=*}"
+        if ! [[ "$param_name" =~ ^[A-Za-z_][A-Za-z0-9_]*$ ]]; then
+          echo "--param の名前が違います: $param_spec" >&2
+          exit 1
+        fi
+        param_overrides+=(-p "$param_spec") ;;
+      --param=*)
+        param_spec="${1#--param=}"; shift
+        case "$param_spec" in
+          *":="*) ;;
+          *)
+            echo "--param の形が違います: $param_spec (<名前>:=<値> で指定してください)" >&2
+            exit 1 ;;
+        esac
+        param_name="${param_spec%%:=*}"
+        if ! [[ "$param_name" =~ ^[A-Za-z_][A-Za-z0-9_]*$ ]]; then
+          echo "--param の名前が違います: $param_spec" >&2
+          exit 1
+        fi
+        param_overrides+=(-p "$param_spec") ;;
       *) usage; exit 2 ;;
     esac
   done
@@ -113,10 +147,24 @@ cmd_start() {
     fi
     echo "撮影の記録: $shot_dir"
   fi
-  # overrides は --params-file より後ろに付ける（引数の上書きが勝つため）
+  # overrides は --params-file より後ろに付ける（引数の上書きが勝つため）。
+  # --param の上書きはほかの上書きより後ろに付ける（詳細設計 -tester.md §7a）。
+  # 値はコンテナの中のシェルで解釈されないよう printf %q で引用する（空白・; を含んでも 1 つの値になる）。
   local inner=". /opt/ros/humble/setup.bash && cd /ws/ss_ws && colcon build && . install/setup.bash && cd /ws && exec ros2 run ss_locator locator_node --ros-args --params-file ss_ws/src/ss_locator/config/locator.yaml"
+  local quoted_overrides=()
+  local override_item
   if [ "${#overrides[@]}" -gt 0 ]; then
-    inner="$inner ${overrides[*]}"
+    for override_item in "${overrides[@]}"; do
+      quoted_overrides+=("$(printf '%q' "$override_item")")
+    done
+  fi
+  if [ "${#param_overrides[@]}" -gt 0 ]; then
+    for override_item in "${param_overrides[@]}"; do
+      quoted_overrides+=("$(printf '%q' "$override_item")")
+    done
+  fi
+  if [ "${#quoted_overrides[@]}" -gt 0 ]; then
+    inner="$inner ${quoted_overrides[*]}"
   fi
 
   "$SS_DOCKER" run -d --name "$container_name" --network host --ipc host \

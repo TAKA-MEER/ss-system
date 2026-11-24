@@ -9,6 +9,7 @@ from __future__ import annotations
 
 import os
 import re
+import shlex
 import subprocess
 from pathlib import Path
 
@@ -439,6 +440,66 @@ def test_stop_fixes_ownership(tmp_path) -> None:
     stop_at = next(i for i, line in enumerate(lines) if line.startswith("stop "))
     chowns = [i for i, line in enumerate(lines) if "chown" in line]
     assert chowns and chowns[0] > stop_at
+
+
+def test_start_param(tmp_path) -> None:
+    result, lines = _run(
+        tmp_path,
+        ["start", "--camera-host", "192.168.5.129", "--param", "scan_view_down_max_deg:=63.0"],
+    )
+    assert result.returncode == 0, result.stderr
+    run = _find(lines, "run", "ss-system:dev")
+    assert "-p scan_view_down_max_deg:=63.0" in run
+    params_at = run.index("--params-file")
+    camera_at = run.index("camera_host:=192.168.5.129")
+    param_at = run.index("scan_view_down_max_deg:=63.0")
+    assert params_at < camera_at < param_at
+
+    result, lines = _run(
+        tmp_path,
+        ["start", "--param", "foo:=1", "--param", "bar:=2"],
+    )
+    assert result.returncode == 0, result.stderr
+    run = _find(lines, "run", "ss-system:dev")
+    assert "-p foo:=1" in run
+    assert "-p bar:=2" in run
+    assert run.index("foo:=1") < run.index("bar:=2")
+
+    result, lines = _run(
+        tmp_path,
+        ["start", "--param=scan_view_down_max_deg:=63.0"],
+    )
+    assert result.returncode == 0, result.stderr
+    run = _find(lines, "run", "ss-system:dev")
+    assert "-p scan_view_down_max_deg:=63.0" in run
+
+
+def test_start_param_bad(tmp_path) -> None:
+    for args in (
+        ["start", "--param", "foo"],
+        ["start", "--param", "foo-bar:=1"],
+        ["start", "--param", "foo bar:=1"],
+        ["start", "--param"],
+        ["start", "--param=foo"],
+    ):
+        result, lines = _run(tmp_path, args)
+        assert result.returncode == 1, (args, result.returncode, result.stderr)
+        assert not _has(lines, "run"), (args, lines)
+
+
+def test_start_param_quoted(tmp_path) -> None:
+    result, lines = _run(
+        tmp_path,
+        ["start", "--fakes", "--param", "x:=a; touch /tmp/p"],
+    )
+    assert result.returncode == 0, result.stderr
+    run = _find(lines, "run", "ss-system:dev")
+    inner = run.split("bash -c ", 1)[1]
+    tokens = shlex.split(inner)
+    assert "x:=a; touch /tmp/p" in tokens, (inner, tokens)
+    assert "touch" not in tokens, (inner, tokens)
+    at = tokens.index("x:=a; touch /tmp/p")
+    assert tokens[at - 1] == "-p"
 
 
 def test_usage(tmp_path) -> None:
