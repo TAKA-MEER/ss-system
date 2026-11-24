@@ -29,7 +29,7 @@
 | `WP-CAL-03` | 校正の道具で外れた検出を捨てる | `WP-CAL-02` | 済み（2026-11-18 マージ） |
 | `WP-TEST-02` | ホストから起こすスクリプト（`scripts/ss.sh`）と `test_cli_busy` の揺れの直し | `WP-TEST-01`・`WP-CAL-03` | 済み（2026-11-19 マージ） |
 | `WP-TEST-03` | 撮影の記録（1 枚ごとの向き・高さ・検出、求めたときだけ静止画） | `WP-TEST-02` | 済み（2026-11-19 マージ） |
-| `WP-SCAN-01` | 走査でピッチも段に振る | `WP-TEST-03` | できる（2026-11-25） |
+| `WP-SCAN-01` | 走査でピッチも段に振る | `WP-TEST-03` | 済み（2026-11-25 マージ） |
 
 先行試作は `../../lifting-lug-pose` の `9265d2d`。**試作のリポジトリは読むだけで、書き換えない。**
 
@@ -724,7 +724,7 @@ scripts/ss.sh stop                     # 0。out/shots-<時刻>/shots.jsonl に�
 
 ## `WP-SCAN-01` 走査でピッチも段に振る
 
-**状態: 2026-11-25 案。**fk-system の依頼（盤の前で手前の吊り金具が写らず `top_not_found`）。[Spec.md](../spec/Spec.md) §1.2「撮り方」（2026-11-25 ユーザー決定）。
+**状態: 2026-11-25 マージ済み（`e790ebb`）。**fk-system の依頼（盤の前で手前の吊り金具が写らず `top_not_found`）。[Spec.md](../spec/Spec.md) §1.2「撮り方」（2026-11-25 ユーザー決定）。
 
 **読む節**: [-core.md](DetailedDesign-core.md) §3（走査の計画。**段の決まりはここが正**）、[-names.md](DetailedDesign-names.md) §5（`scan_pitch_down_deg`・`scan_view_down_max_deg`）、`ss_locator/scan_plan.py`、`ss_locator/locate_core.py`（`_begin_scanning`・`_point_current`・`_on_frame`・`_finish` の `seen_ranges`）、`ss_locator/locator_node.py`（パラメータの宣言・読み込み・`hfov_rad` を渡す所）、`tests/test_scan_plan.py`・`tests/test_locate_core.py`（書き方の手本）。
 
