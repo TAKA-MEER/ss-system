@@ -198,6 +198,7 @@ class LocatorNode(Node):
         self.declare_parameter("scan_camera_height_m", 3.10)
         self.declare_parameter("min_camera_height_m", 2.95)
         self.declare_parameter("scan_pitch_down_deg", 20.0)
+        self.declare_parameter("scan_view_down_max_deg", 70.0)
         self.declare_parameter("scan_overlap_ratio", 0.1)
         self.declare_parameter("settle_s", 0.5)
         self.declare_parameter("image_timeout_s", 5.0)
@@ -265,6 +266,7 @@ class LocatorNode(Node):
         self.scan_camera_height_m = float(value("scan_camera_height_m"))
         self.min_camera_height_m = float(value("min_camera_height_m"))
         self.scan_pitch_down_deg = float(value("scan_pitch_down_deg"))
+        self.scan_view_down_max_deg = float(value("scan_view_down_max_deg"))
         self.scan_overlap_ratio = float(value("scan_overlap_ratio"))
         self.settle_s = float(value("settle_s"))
         self.image_timeout_s = float(value("image_timeout_s"))
@@ -319,6 +321,7 @@ class LocatorNode(Node):
             "scan_camera_height_m": self.scan_camera_height_m,
             "min_camera_height_m": self.min_camera_height_m,
             "scan_pitch_down_deg": self.scan_pitch_down_deg,
+            "scan_view_down_max_deg": self.scan_view_down_max_deg,
             "scan_overlap_ratio": self.scan_overlap_ratio,
             "settle_s": self.settle_s,
             "image_timeout_s": self.image_timeout_s,
@@ -328,6 +331,7 @@ class LocatorNode(Node):
             "cleanup_limit_max_s": self.cleanup_limit_max_s,
             "camera_height_offset_m": self.camera_height_offset_m,
             "hfov_rad": scan_plan.hfov_from_fx(float(self._camera_K[0, 0])),
+            "vfov_rad": scan_plan.vfov_from_fy(float(self._camera_K[1, 1])),
         }
 
     # ------------------------------------------------------------------ アクション

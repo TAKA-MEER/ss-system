@@ -304,6 +304,21 @@ def test_node_two_lug_parameters():
         rig.close()
 
 
+def test_node_passes_vfov():
+    rig = Rig()
+    try:
+        from ss_locator import scan_plan
+
+        params = rig.node._core_parameters()
+        # camera_K の fy（[1, 1]）から縦の画角を求めて渡す（既定の K は fx = fy）
+        assert params["vfov_rad"] == pytest.approx(
+            scan_plan.vfov_from_fy(float(rig.node._camera_K[1, 1]))
+        )
+        assert params["scan_view_down_max_deg"] == pytest.approx(70.0)
+    finally:
+        rig.close()
+
+
 def test_node_busy_reject():
     rig = Rig()
     try:
