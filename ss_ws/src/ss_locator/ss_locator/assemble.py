@@ -6,6 +6,7 @@
 - 天板の高さを定数 `PANEL_H`（試作は 2.35）から引数 `top_height_m` にした（`lift` と `Z_RING` を使う箇所）
 - `orient_rows`（並んだ盤で幅の向きを決め直す）は写さない。幅は spec の「機体側に最も向いている辺」で決める
 - `assemble` は `fuse` → `group` → `fit` まで（`orient_rows` を呼ばない）
+- `group` は 3〜4 個を金具の位置だけで組む（輪の向きは使わない）
 
 前提: カメラの内部・外部パラメータは既知、天板上面の高さは `top_height_m`、
 リング面は盤の中心を通る向きに付いている（実物の取付規則、2026-11-03）。背中合わせの盤は正面側の 2 個だけ。
@@ -26,7 +27,6 @@ from .geometry import undistort_rays
 
 RING_DZ = 0.0365                 # 天板上面からリング中心までの高さ（アイボルト M20 の実測、大きさ ±5% で 0.035〜0.038）
 LUG_INSET = 0.0675               # 天板の角から金具の軸までの距離（0.05〜0.085 の中央）
-R_MIN, R_MAX = 0.2, 0.78         # 金具から盤の中心までの距離 [m]（幅 0.6〜1.2 m・奥行 0.6〜1.0 m、金具は角から 5〜8.5 cm）
 MOUNT_SIGMA = 3.0                # 取付のずれなど、画素の誤差によらない向きのばらつき [deg]
 
 
@@ -130,11 +130,6 @@ def _line_dist(L, c):
     return abs(v[0] * u[1] - v[1] * u[0])
 
 
-def _tol(L, r):
-    """リング面の線と中心候補の距離の許容幅 [m]。"""
-    return float(np.clip(r * math.sin(math.radians(2.5 * L["s_axis"])), 0.04, 0.15))
-
-
 def _pair_center(A, B):
     """金具 2 個 → 盤の中心の候補。長方形の四隅は中心から等距離なので、中心は 2 個の垂直二等分線の上にある。
     その線の上で、2 本のリング面の線からの距離（ばらつきで重み付け）が最小になる点。対角の 2 個なら中点になる。"""
@@ -155,58 +150,6 @@ def _pair_center(A, B):
     return mid - num / den * n
 
 
-def _refine(members, c):
-    """中心を、支持する金具のリング面の線までの距離の重み付き最小二乗で直す。"""
-    if len(members) < 2:
-        return c
-    A, b = [], []
-    for L in members:
-        u = _dir(L["axis"])
-        n = np.array([-u[1], u[0]])
-        w = 1 / max(_tol(L, np.linalg.norm(c - L["p"])), 1e-3)
-        A.append(w * n)
-        b.append(w * n @ L["p"])
-    A, b = np.array(A), np.array(b)
-    if np.linalg.matrix_rank(A, tol=1e-6) < 2:
-        return c
-    return np.linalg.lstsq(A, b, rcond=None)[0]
-
-
-def _support(lugs, idx, c):
-    m = []
-    for i in idx:
-        r = np.linalg.norm(c - lugs[i]["p"])
-        if R_MIN <= r <= R_MAX and _line_dist(lugs[i], c) <= _tol(lugs[i], r):
-            m.append(i)
-    if len(m) < 2:
-        return []
-    # 長方形の四隅は中心から等距離。中央値から離れたものを外す
-    r = np.array([np.linalg.norm(c - lugs[i]["p"]) for i in m])
-    m = [i for i, ri in zip(m, r) if abs(ri - np.median(r)) < 0.12]
-    return sorted(m, key=lambda i: _line_dist(lugs[i], c))[:4]
-
-
-def _rect_subset(lugs, m, c, pair, tol=0.1):
-    """支持する金具から、長方形の四隅として矛盾しない最大の組を選ぶ。四隅のうち 3 個以上には、中心について
-    対称な（対角の）組が必ずある（3 個なら 1 組、4 個なら 2 組）。背中合わせの列どうしの金具が混ざるのを防ぐ。"""
-    from itertools import combinations
-    v = {k: lugs[k]["p"] - c for k in m}
-    diag = lambda a, b: np.linalg.norm(v[a] + v[b]) < tol
-    for n in (4, 3):
-        best = None
-        for s in combinations(m, n):
-            if not set(pair) <= set(s):
-                continue
-            nd = sum(diag(a, b) for a, b in combinations(s, 2))
-            if nd == n - 2:
-                cost = sum(_line_dist(lugs[k], c) for k in s)
-                if best is None or cost < best[0]:
-                    best = (cost, list(s))
-        if best:
-            return best[1]
-    return list(pair)
-
-
 def _between(lugs, idx, i, j):
     """金具 i と j を結ぶ線分の途中に、ほかの金具があるか（隣の盤どうしの組を除くため）。"""
     a, b = lugs[i]["p"], lugs[j]["p"]
@@ -222,40 +165,99 @@ def _between(lugs, idx, i, j):
 
 
 def group(lugs):
-    """金具 → 盤ごとの金具の組 [[index]]。"""
-    left = set(range(len(lugs)))
+    """Position-only rectangle groups with three or four corner lugs."""
+    from itertools import combinations
+
+    side_min = 0.6 - 2 * LUG_INSET - 0.05
+    side_max = 1.2 - 2 * LUG_INSET + 0.05
+    diagonal_max = math.sqrt(2.0) * side_max
+    points = np.asarray([lug["p"] for lug in lugs], dtype=float)
+    n_lugs = len(points)
+    if n_lugs < 3:
+        return []
+
+    # A rectangle's longest pair is a diagonal. Spatial adjacency avoids testing
+    # all 4-combinations when a scan contains many unrelated lugs.
+    neighbors = []
+    for i, p in enumerate(points):
+        neighbors.append([j for j in range(n_lugs) if j != i and
+                          np.linalg.norm(points[j] - p) <= diagonal_max + 1e-9])
+
+    candidates = []
+    seen = set()
+    all_indices = range(n_lugs)
+
+    def no_interior(P, members):
+        origin = P[0]
+        e1, e2 = P[1] - origin, P[3] - origin
+        l1, l2 = float(e1 @ e1), float(e2 @ e2)
+        if l1 < 1e-12 or l2 < 1e-12:
+            return False
+        member_points = points[list(members)]
+        for k in all_indices:
+            if k in members or np.min(np.linalg.norm(member_points - points[k], axis=1)) < 0.08:
+                continue
+            q = points[k] - origin
+            a, b = float(q @ e1 / l1), float(q @ e2 / l2)
+            if -0.05 < a < 1.05 and -0.05 < b < 1.05:
+                return False
+        return True
+
+    def ordered_quad(P):
+        center = P.mean(axis=0)
+        order = np.argsort(np.arctan2(P[:, 1] - center[1], P[:, 0] - center[0]))
+        return P[order]
+
+    # Four-corner rectangles: only local 4-cliques are considered.
+    for i in range(n_lugs):
+        near = [j for j in neighbors[i] if j > i]
+        for rest in combinations(near, 3):
+            members = (i,) + rest
+            if any(not np.any(np.isin(neighbors[a], [b])) for a, b in combinations(members, 2)):
+                continue
+            P = ordered_quad(points[list(members)])
+            d02, d13 = P[2] - P[0], P[3] - P[1]
+            center_error = float(np.linalg.norm((P[0] + P[2] - P[1] - P[3]) / 2))
+            diagonal_error = abs(float(np.linalg.norm(d02)) - float(np.linalg.norm(d13)))
+            sides = [float(np.linalg.norm(P[(k + 1) % 4] - P[k])) for k in range(4)]
+            if (center_error > 0.05 or diagonal_error > 0.05 or
+                    not all(side_min <= side <= side_max for side in sides)):
+                continue
+            if not no_interior(P, members):
+                continue
+            key = tuple(sorted(members))
+            if key not in seen:
+                seen.add(key)
+                candidates.append(((0, center_error + diagonal_error), key))
+
+    # Three-corner rectangles: each member can be the right-angle corner.
+    for members in combinations(range(n_lugs), 3):
+        if any(np.linalg.norm(points[a] - points[b]) > diagonal_max + 1e-9
+               for a, b in combinations(members, 2)):
+            continue
+        for corner in members:
+            others = [k for k in members if k != corner]
+            u, v = points[others[0]] - points[corner], points[others[1]] - points[corner]
+            lu, lv = float(np.linalg.norm(u)), float(np.linalg.norm(v))
+            if not (side_min <= lu <= side_max and side_min <= lv <= side_max):
+                continue
+            cosine = abs(float(u @ v)) / (lu * lv)
+            if cosine > 0.08:
+                continue
+            P = np.array([points[corner], points[others[0]],
+                          points[others[0]] + v, points[others[1]]])
+            if no_interior(P, members):
+                candidates.append(((1, cosine), tuple(sorted(members))))
+
+    # Stable ordering resolves equal geometric scores independently of ring axes.
+    candidates.sort(key=lambda item: (item[0], item[1]))
     groups = []
-    while True:
-        idx = sorted(left)
-        best = None
-        for a in range(len(idx)):
-            for b in range(a + 1, len(idx)):
-                i, j = idx[a], idx[b]
-                d = np.linalg.norm(lugs[i]["p"] - lugs[j]["p"])
-                # 間にある金具は、もう別の盤に割り当てたものも数える
-                if not 0.3 <= d <= 1.6 or _between(lugs, range(len(lugs)), i, j):
-                    continue
-                c = _pair_center(lugs[i], lugs[j])
-                if c is None:
-                    continue
-                m = _support(lugs, idx, c)
-                if i not in m or j not in m:
-                    continue
-                m = _rect_subset(lugs, m, c, (i, j))
-                c = _refine([lugs[k] for k in m], c)
-                m2 = _support(lugs, idx, c)
-                if i in m2 and j in m2:
-                    m2 = _rect_subset(lugs, m2, c, (i, j))
-                    if len(m2) >= len(m):
-                        m = m2
-                res = np.mean([_line_dist(lugs[k], c) for k in m])
-                score = (len(m), sum(lugs[k]["conf"] for k in m) - res)
-                if best is None or score > best[0]:
-                    best = (score, m)
-        if best is None:
-            return groups
-        groups.append(best[1])
-        left -= set(best[1])
+    assigned = set()
+    for _score, members in candidates:
+        if assigned.isdisjoint(members):
+            groups.append(list(members))
+            assigned.update(members)
+    return groups
 
 
 def _rect(P):
