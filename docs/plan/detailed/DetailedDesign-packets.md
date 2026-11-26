@@ -31,6 +31,7 @@
 | `WP-TEST-03` | 撮影の記録（1 枚ごとの向き・高さ・検出、求めたときだけ静止画） | `WP-TEST-02` | 済み（2026-11-19 マージ） |
 | `WP-SCAN-01` | 走査でピッチも段に振る | `WP-TEST-03` | 済み（2026-11-25 マージ） |
 | `WP-TEST-04` | `ss.sh start` に任意のパラメータの上書き（`--param`） | `WP-TEST-02` | 済み（2026-11-25 マージ） |
+| `WP-EST-05` | 金具 3〜4 個の組分けを位置だけで決める（輪の向きを使わない） | `WP-EST-04` | できる |
 
 先行試作は `../../lifting-lug-pose` の `9265d2d`。**試作のリポジトリは読むだけで、書き換えない。**
 
@@ -787,3 +788,35 @@ scripts/ss.sh stop
 | `test_start_param_quoted` | 値に空白と `;` を含めても（例 `x:=a; touch /tmp/p`）、コンテナの中のシェルで 1 つの値として渡り、別のコマンドとして走らない（偽の docker が受けた `bash -c` の文字列を `bash` で語に分けて確かめる） |
 
 **変異チェック（実装管理担当が自分で回す）**: (1) `--param` を `overrides` に足さない、(2) `--params-file` より前に付ける、(3) 値を引用しない、(4) 名前の形を確かめない、のそれぞれで試験が落ちること。
+
+## `WP-EST-05` 金具 3〜4 個の組分けを位置だけで決める
+
+**状態: 2026-11-26 着手。**fk-system の申し送り（同じ 4 個の金具を拾っているのに、盤の面から 0.889 m だと 9 回中 3 回 `lugs_ungrouped`）。原因は輪の向きのずれが組分けの判定の境に乗ること（[-core.md](DetailedDesign-core.md) §4.2 の経緯）。ユーザー承認（2026-11-26）。spec は変えない（[Spec.md](../spec/Spec.md) §1.2「金具の取り付け角」の「輪の向きは側を決めるだけ」に実装を合わせる）。
+
+**読む節**: [-core.md](DetailedDesign-core.md) §4.1・§4.2（**決まりは §4.2 が正**）、`ss_locator/assemble.py`、`ss_locator/panels.py`（`_make_fragments` が 3〜4 個の盤と 2 個の組をどう使うか）、`tests/test_assemble.py`・`tests/test_panels.py`。
+
+| やること | 中身 |
+| --- | --- |
+| 組分け | `assemble.py` の `group` を -core.md §4.2 の決まりに書き換える。`_support`・`_rect_subset`・`_refine` など使わなくなるものは消す。`_pair_center`・`_between`・`_line_dist`・`_tol`（`panels.py` が使うもの）は残す。ファイル先頭の「変えたところ」に 1 行足す |
+| 速さ | 金具が多い場面（試作の記録の場面 7、金具 43 個）で、`group` が 1 秒未満。全部の 4 個の組を作らず、近い金具（対角の上限以内）だけから作る |
+| 試験の材料 | fk の sim の撮影の記録（19 回 × 15 枚、0.889 m）を `tests/fixtures/fk_sim_20261126_shots.jsonl` に置く |
+| 変えないもの | 口・`lift`・`fuse`・`fit`・`panels.py`（`pos_std_m` の式も変えない）・ノード・設定 |
+
+**受け入れ条件**:
+
+```bash
+docker run --rm -v "$PWD":/ws ss-system:dev bash scripts/test.sh   # 0 で終わる
+```
+
+| 試験 | 確かめること |
+| --- | --- |
+| `test_fk_sim_shots_group_four` | 材料の 19 回それぞれで、記録の検出を `lift`（`locator.yaml` のカメラの値）→ `assemble` → `panels.make_panel_tops` に通すと、盤 1 面・金具 4 個・中心が (1.488, 0.0) から 0.02 m 以内・幅と奥行きが 1.0 m と 1.2 m から 0.03 m 以内 |
+| `test_group_ignores_ring_axis` | 長方形の四隅の金具で、輪の向きをでたらめ（中心を向かない）にしても 4 個の組 1 つ |
+| `test_group_three_lugs` | 直角に並んだ 3 個 → 3 個の組。直角でない 3 個（cos 0.2）→ 組なし |
+| `test_group_side_range` | 継ぎ目をはさむ 2 列（0.135 m）と、背中合わせの正面の列どうし（1.2 m 以上）は組まない |
+| `test_group_row_of_panels` | 横に並んだ 3 面（幅 0.6・間 0.02 m）の金具 12 個 → 正しい 3 組。隣の盤とまたぐ長方形（間の列が内側にある）を取らない |
+| `test_group_duplicate_lug` | 隅の金具から 0.04 m に同じ金具の重複があっても、4 個の組ができる |
+| `test_group_speed` | 試作の記録の場面 7 で `group` が 1 秒未満 |
+| 試作との一致 | `test_assemble_matches_proto` は、組分けを比べるのをやめ、`lift`・`fuse` の結果（金具の位置・数）が試作と一致することを比べる形に直す |
+
+**変異チェック（実装管理担当が自分で回す）**: (1) ほかの金具が内側にある長方形を捨てない、(2) 重複の除外（0.08 m）をやめる、(3) 輪の線と中心の距離を組分けの条件に戻す、(4) 3 個を 4 個より先に取る、(5) 割り当て済みの金具を内側の判定から外す、のそれぞれで試験が落ちること。fk の記録で再生して 19 回とも 1 面になること、試作の合成データの評価（robot_v3_test）で合格が今の 76.5% を下回らないことも、実装管理担当が確かめる。
